@@ -1,0 +1,44 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/pipeline",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/diagnostics",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/icm",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/health",
+      "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 9 * * 5"
+    },
+    {
+      "path": "/api/cron/seo",
+      "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/cro",
+      "schedule": "0 3 1,15 * *"
+    },
+    {
+      "path": "/api/cron/content-allocation",
+      "schedule": "0 5 1 * *"
+    },
+    {
+      "path": "/api/cron/content-roi",
+      "schedule": "0 6 2 * *"
+    },
+    {
+      "path": "/api/cron/persona-deployment",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

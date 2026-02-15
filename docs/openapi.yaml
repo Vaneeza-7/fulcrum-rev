@@ -1,0 +1,398 @@
+openapi: 3.1.0
+info:
+  title: Fulcrum Rev API
+  version: 0.1.0
+  description: |
+    Multi-tenant B2B lead generation and revenue operations engine.
+    API-only with Slack as the primary control plane (Huck AI agent).
+
+servers:
+  - url: https://fulcrum-rev.vercel.app
+    description: Production
+  - url: http://localhost:3000
+    description: Development
+
+paths:
+  /api/health:
+    get:
+      summary: System health check
+      description: Returns database connectivity, pipeline freshness, and tenant summary.
+      tags: [Health]
+      responses:
+        "200":
+          description: System is healthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/webhooks/clerk:
+    post:
+      summary: Clerk organization webhook
+      description: Creates/updates/deactivates tenants when Clerk organizations change.
+      tags: [Webhooks]
+      security:
+        - clerkWebhook: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [organization.created, organization.updated, organization.deleted]
+                data:
+                  type: object
+      responses:
+        "200":
+          description: Webhook received
+        "401":
+          description: Missing webhook signature
+
+  /api/webhooks/apify:
+    post:
+      summary: Apify actor run webhook
+      description: Receives notifications when Apify scraping actors complete.
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                eventType:
+                  type: string
+                resource:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    status:
+                      type: string
+      responses:
+        "200":
+          description: Webhook received
+
+  /api/slack/events:
+    post:
+      summary: Slack Events API
+      description: |
+        Primary entry point for the Huck AI agent.
+        Handles app_mention and direct message events.
+        Supports URL verification challenge.
+      tags: [Slack]
+      security:
+        - slackSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Event acknowledged
+
+  /api/slack/commands:
+    post:
+      summary: Slack slash commands
+      description: |
+        Handles `/fulcrum` slash commands:
+        - `status` — Pipeline stats, grade distribution, stalled deals
+        - `run` — Trigger pipeline manually
+        - `deals` — List stalled deals
+      tags: [Slack]
+      security:
+        - slackSignature: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                command:
+                  type: string
+                text:
+                  type: string
+                team_id:
+                  type: string
+      responses:
+        "200":
+          description: Command response (Slack block payload)
+
+  /api/slack/interactions:
+    post:
+      summary: Slack interactive components
+      description: |
+        Handles button clicks from Slack messages:
+        - `push_all_aplus` — Push all A+ leads to CRM
+        - `review_leads` — Post individual lead cards for review
+        - `approve_lead` — Approve and push a single lead
+        - `reject_lead` — Reject a single lead
+        - `reject_grade` — Bulk-reject leads by grade
+      tags: [Slack]
+      security:
+        - slackSignature: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: string
+                  description: JSON-encoded Slack interaction payload
+      responses:
+        "200":
+          description: Interaction response
+
+  /api/cron/pipeline:
+    post:
+      summary: Daily lead generation pipeline
+      description: Scrape → Enrich → Score → Notify for all active tenants.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      responses:
+        "200":
+          description: Pipeline results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  tenants_processed:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  errors:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          description: Unauthorized
+
+  /api/cron/diagnostics:
+    post:
+      summary: Deal diagnostics
+      description: Check CRM deals for stalled status, generate re-engagement actions.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      responses:
+        "200":
+          description: Diagnostics results
+        "401":
+          description: Unauthorized
+
+  /api/cron/icm:
+    get:
+      summary: ICM reconciliation
+      description: |
+        Triple-match reconciliation (CRM → Invoice → Payment) for commission tracking.
+        Optionally filter by tenantId query parameter.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reconciliation results
+        "401":
+          description: Unauthorized
+
+  /api/cron/health:
+    post:
+      summary: Health checks with Huck alerts
+      description: |
+        Run CRM connectivity, data freshness, and pipeline health checks.
+        Sends Huck system alerts for critical/degraded states.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      responses:
+        "200":
+          description: Health check results
+        "401":
+          description: Unauthorized
+
+  /api/cron/weekly-digest:
+    post:
+      summary: Weekly performance digest
+      description: Send Huck's weekly digest to all active tenants via Slack.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      responses:
+        "200":
+          description: Digest sent
+        "401":
+          description: Unauthorized
+
+  /api/cron/seo:
+    get:
+      summary: SEO audit
+      description: |
+        Weekly SEO position tracking, drop detection, cannibalization analysis.
+        Optionally filter by tenantId query parameter.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SEO audit results
+        "401":
+          description: Unauthorized
+
+  /api/cron/cro:
+    get:
+      summary: CRO audit
+      description: |
+        Bi-weekly Conversion Rate Optimization audit.
+        Page-level analysis, funnel leakage detection, A/B test hypothesis generation.
+        Optionally filter by tenantId query parameter.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: CRO audit results
+        "401":
+          description: Unauthorized
+
+  /api/cron/content-allocation:
+    post:
+      summary: Monthly content allocation
+      description: Calculate profitability scores, detect saturation, allocate content slots.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Content allocation results
+        "401":
+          description: Unauthorized
+
+  /api/cron/content-roi:
+    post:
+      summary: Monthly content ROI analysis
+      description: |
+        Update content attribution, generate ROI report, auto-kill underperformers (EVS < 20).
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Content ROI results
+        "401":
+          description: Unauthorized
+
+  /api/cron/persona-deployment:
+    post:
+      summary: Daily persona snippet deployment
+      description: Check for persona snippets ready to deploy and post to Slack.
+      tags: [Cron]
+      security:
+        - cronSecret: []
+      responses:
+        "200":
+          description: Deployment results
+        "401":
+          description: Unauthorized
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          properties:
+            database:
+              $ref: "#/components/schemas/HealthCheck"
+            pipeline:
+              $ref: "#/components/schemas/HealthCheck"
+            tenants:
+              $ref: "#/components/schemas/HealthCheck"
+
+    HealthCheck:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        detail:
+          type: string
+        latencyMs:
+          type: number
+
+  securitySchemes:
+    cronSecret:
+      type: http
+      scheme: bearer
+      description: CRON_SECRET token via Authorization Bearer header
+    slackSignature:
+      type: apiKey
+      in: header
+      name: x-slack-signature
+      description: Slack request signature (HMAC-SHA256)
+    clerkWebhook:
+      type: apiKey
+      in: header
+      name: svix-id
+      description: Clerk/Svix webhook signature

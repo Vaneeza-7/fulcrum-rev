@@ -1,0 +1,697 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// TENANTS (organizations/customers)
+// ============================================================================
+model Tenant {
+  id          String   @id @default(uuid()) @db.Uuid
+  clerkOrgId  String?  @unique @map("clerk_org_id")
+  name        String
+  slug        String   @unique
+  productType String   @map("product_type") // 'hunhu' | 'pulse' | custom
+  crmType     String   @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce'
+  crmConfig   Json     @default("{}") @map("crm_config")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // ICM (Incentive Compensation Management)
+  businessModel     String    @default("usage_based") @map("business_model") // 'usage_based' | 'performance_based'
+  erpType           String?   @map("erp_type") // 'netsuite' | 'quickbooks'
+  erpConfig         Json      @default("{}") @map("erp_config")
+  rsaConfig         Json      @default("{}") @map("rsa_config") // Revenue Sharing Agreement terms
+  icmConfig         Json      @default("{}") @map("icm_config") // notification prefs, rep IDs
+  contractStartDate DateTime? @map("contract_start_date")
+  auditStatus       String    @default("none") @map("audit_status") // 'none' | 'in_progress' | 'appeal_window' | 'locked'
+  auditLockedAt     DateTime? @map("audit_locked_at")
+
+  // Predictive Revenue Engine (PRE) — external API configs
+  gscConfig         Json      @default("{}") @map("gsc_config") // Google Search Console OAuth tokens
+  ga4Config         Json      @default("{}") @map("ga4_config") // Google Analytics 4 OAuth tokens
+  clarityConfig     Json      @default("{}") @map("clarity_config") // Microsoft Clarity project config
+  dataforseoConfig  Json      @default("{}") @map("dataforseo_config") // DataForSEO API creds
+
+  leads                Lead[]
+  intentSignals        IntentSignal[]
+  dealDiagnostics      DealDiagnostic[]
+  auditLogs            AuditLog[]
+  searchQueries        TenantSearchQuery[]
+  intentKeywords       TenantIntentKeyword[]
+  scoringConfigs       TenantScoringConfig[]
+  slackConfig          TenantSlackConfig?
+  conversationMessages ConversationMessage[]
+  onboardingWorkflows  OnboardingWorkflow[]
+  systemHealthChecks   SystemHealthCheck[]
+  knowledgePatterns    KnowledgeBasePattern[]
+  commissionTrackers   CommissionTracker[]
+  commissionLedger     CommissionLedger[]
+  disputes             Dispute[]
+  clawbacks            Clawback[]
+  preExistingDeals     PreExistingDeal[]
+  serviceProfiles      ServiceProfile[]
+  contentAssets        ContentAsset[]
+  seoKeywords          SEOKeywordTracker[]
+  seoAudits            SEOAudit[]
+  croAudits            CROAudit[]
+  abTests              ABTest[]
+
+  @@map("tenants")
+}
+
+// ============================================================================
+// LEADS (all discovered prospects)
+// ============================================================================
+model Lead {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  // LinkedIn data
+  linkedinUrl String  @map("linkedin_url")
+  fullName    String  @map("full_name")
+  title       String?
+  company     String?
+  location    String?
+  profileData Json    @default("{}") @map("profile_data")
+
+  // Enrichment
+  enrichmentData Json      @default("{}") @map("enrichment_data")
+  enrichedAt     DateTime? @map("enriched_at")
+
+  // Scoring
+  fitScore       Decimal   @default(0) @map("fit_score") @db.Decimal(5, 2)
+  intentScore    Decimal   @default(0) @map("intent_score") @db.Decimal(5, 2)
+  fulcrumScore   Decimal   @default(0) @map("fulcrum_score") @db.Decimal(5, 2)
+  fulcrumGrade   String?   @map("fulcrum_grade")
+  scoreBreakdown Json      @default("{}") @map("score_breakdown")
+  scoredAt       DateTime? @map("scored_at")
+
+  // AI-generated
+  firstLine            String?   @map("first_line")
+  firstLineGeneratedAt DateTime? @map("first_line_generated_at")
+
+  // Data freshness
+  lastDataCheckAt    DateTime? @map("last_data_check_at")
+  dataFreshnessScore Int       @default(100) @map("data_freshness_score")
+  isStale            Boolean   @default(false) @map("is_stale")
+
+  // Workflow
+  status          String    @default("discovered")
+  rejectionReason String?   @map("rejection_reason")
+  crmLeadId       String?   @map("crm_lead_id")
+  pushedToCrmAt   DateTime? @map("pushed_to_crm_at")
+
+  discoveredAt DateTime @default(now()) @map("discovered_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  intentSignals IntentSignal[]
+
+  @@unique([tenantId, linkedinUrl])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, fulcrumScore(sort: Desc)])
+  @@map("leads")
+}
+
+// ============================================================================
+// INTENT SIGNALS
+// ============================================================================
+model IntentSignal {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  leadId   String @map("lead_id") @db.Uuid
+
+  signalType  String  @map("signal_type")
+  signalValue Json    @map("signal_value")
+  signalScore Decimal @map("signal_score") @db.Decimal(5, 2)
+
+  detectedAt DateTime @map("detected_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@map("intent_signals")
+}
+
+// ============================================================================
+// DEAL DIAGNOSTICS (stalled deal detection)
+// ============================================================================
+model DealDiagnostic {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  dealId    String   @map("deal_id")
+  dealName  String?  @map("deal_name")
+  dealValue Decimal? @map("deal_value") @db.Decimal(12, 2)
+  dealStage String?  @map("deal_stage")
+
+  lastActivityDate   DateTime? @map("last_activity_date")
+  daysSinceActivity  Int?      @map("days_since_activity")
+  stageChangeDate    DateTime? @map("stage_change_date")
+  daysInStage        Int?      @map("days_in_stage")
+  emailSentCount     Int       @default(0) @map("email_sent_count")
+  emailResponseCount Int       @default(0) @map("email_response_count")
+  engagementScore    Decimal?  @map("engagement_score") @db.Decimal(5, 2)
+
+  isStalled         Boolean   @default(false) @map("is_stalled")
+  stalledReason     String?   @map("stalled_reason")
+  stalledDetectedAt DateTime? @map("stalled_detected_at")
+
+  taskCreated Boolean @default(false) @map("task_created")
+  taskId      String? @map("task_id")
+  alertSent   Boolean @default(false) @map("alert_sent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, dealId])
+  @@index([tenantId])
+  @@map("deal_diagnostics")
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String?  @map("tenant_id") @db.Uuid
+  actionType String   @map("action_type")
+  resourceId String?  @map("resource_id") @db.Uuid
+  details    Json     @default("{}") @map("details")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+// ============================================================================
+// TENANT CONFIGURATION TABLES (data-driven, no hardcoded config)
+// ============================================================================
+
+model TenantSearchQuery {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  queryName   String  @map("query_name")
+  searchQuery Json    @map("search_query")
+  maxResults  Int     @default(10) @map("max_results")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_search_queries")
+}
+
+model TenantIntentKeyword {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  keyword     String
+  intentScore Decimal @map("intent_score") @db.Decimal(3, 1)
+  category    String?
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_intent_keywords")
+}
+
+model TenantScoringConfig {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  configType String @map("config_type") // company_size | industry_fit | role_authority | revenue_signals
+  configData Json   @map("config_data")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, configType])
+  @@index([tenantId])
+  @@map("tenant_scoring_configs")
+}
+
+model TenantSlackConfig {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  teamId      String  @map("team_id")
+  botToken    String  @map("bot_token")
+  channelId   String  @map("channel_id")
+  webhookUrl  String? @map("webhook_url")
+  installedAt DateTime @default(now()) @map("installed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_slack_configs")
+}
+
+// ============================================================================
+// HUCK CONVERSATION MESSAGES (agent memory per Slack thread)
+// ============================================================================
+model ConversationMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  slackChannelId String   @map("slack_channel_id")
+  slackThreadTs  String?  @map("slack_thread_ts")
+  role           String   // 'user' | 'assistant' | 'system'
+  content        String
+  intent         String?  // Classified intent for user messages
+  entitiesJson   Json     @default("{}") @map("entities_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, slackChannelId, slackThreadTs])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("conversation_messages")
+}
+
+// ============================================================================
+// ONBOARDING WORKFLOWS (enterprise tenant onboarding tracking)
+// ============================================================================
+model OnboardingWorkflow {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  status      String   @default("pending") // 'pending' | 'in_progress' | 'completed' | 'failed'
+  currentStep String?  @map("current_step")
+  stepsJson   Json     @default("[]") @map("steps_json")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("onboarding_workflows")
+}
+
+// ============================================================================
+// SYSTEM HEALTH CHECKS (proactive monitoring history)
+// ============================================================================
+model SystemHealthCheck {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  checkType   String   @map("check_type") // 'crm_connectivity' | 'data_freshness' | 'pipeline_health' | 'api_quota'
+  status      String   // 'healthy' | 'degraded' | 'critical'
+  detailsJson Json     @default("{}") @map("details_json")
+  checkedAt   DateTime @default(now()) @map("checked_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, checkedAt(sort: Desc)])
+  @@map("system_health_checks")
+}
+
+// ============================================================================
+// KNOWLEDGE BASE PATTERNS (learned from Huck interactions)
+// ============================================================================
+model KnowledgeBasePattern {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  patternType   String   @map("pattern_type")
+  triggerPhrase String   @map("trigger_phrase")
+  resolution    String
+  usageCount    Int      @default(0) @map("usage_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("knowledge_base_patterns")
+}
+
+// ============================================================================
+// COMMISSION TRACKERS (Triple-Match deal tracking for ICM)
+// ============================================================================
+model CommissionTracker {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  // CRM deal reference
+  crmDealId    String   @map("crm_deal_id")
+  dealName     String?  @map("deal_name")
+  dealValue    Decimal  @map("deal_value") @db.Decimal(12, 2)
+  customerName String?  @map("customer_name")
+  closedWonAt  DateTime @map("closed_won_at")
+
+  // Triple-Match status
+  match1Crm                Boolean   @default(false) @map("match_1_crm")
+  match1At                 DateTime? @map("match_1_at")
+  match2Invoice            Boolean   @default(false) @map("match_2_invoice")
+  match2At                 DateTime? @map("match_2_at")
+  erpInvoiceId             String?   @map("erp_invoice_id")
+  match3Payment            Boolean   @default(false) @map("match_3_payment")
+  match3At                 DateTime? @map("match_3_at")
+  erpPaymentId             String?   @map("erp_payment_id")
+  cancellationWindowEndsAt DateTime? @map("cancellation_window_ends_at")
+
+  // Attribution proof
+  fulcrumAlertAt     DateTime? @map("fulcrum_alert_at")
+  firstCrmActivityAt DateTime? @map("first_crm_activity_at")
+  attributionProof   Json      @default("{}") @map("attribution_proof")
+
+  // Status
+  status String @default("tracking")
+  // 'tracking' | 'match_1_complete' | 'match_2_complete' | 'ready_for_calculation' | 'calculated' | 'disputed' | 'clawed_back' | 'ineligible'
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledger    CommissionLedger[]
+  disputes  Dispute[]
+  clawbacks Clawback[]
+
+  @@unique([tenantId, crmDealId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("commission_trackers")
+}
+
+// ============================================================================
+// COMMISSION LEDGER (immutable ASC 606 calculation records)
+// ============================================================================
+model CommissionLedger {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  trackerId String @map("tracker_id") @db.Uuid
+
+  // Calculation inputs (immutable snapshot)
+  dealValue        Decimal @map("deal_value") @db.Decimal(12, 2)
+  commissionRate   Decimal @map("commission_rate") @db.Decimal(5, 4) // e.g. 0.1000 = 10%
+  tierName         String  @map("tier_name")
+  calculatedAmount Decimal @map("calculated_amount") @db.Decimal(12, 2)
+
+  // Proof
+  calculationProof Json @map("calculation_proof")
+  attributionProof Json @map("attribution_proof")
+  rsaTermsSnapshot Json @map("rsa_terms_snapshot")
+
+  // Tamper detection
+  integrityHash String @map("integrity_hash") // SHA-256
+
+  // Lifecycle
+  status     String   @default("pending") // 'pending' | 'approved' | 'invoiced' | 'paid' | 'reversed'
+  quarterKey String   @map("quarter_key") // e.g. '2026-Q4'
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tracker CommissionTracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, quarterKey])
+  @@index([trackerId])
+  @@map("commission_ledger")
+}
+
+// ============================================================================
+// DISPUTES (commission dispute tracking)
+// ============================================================================
+model Dispute {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  trackerId String @map("tracker_id") @db.Uuid
+
+  disputeType  String @map("dispute_type") // 'attribution_challenge' | 'value_discrepancy' | 'payment_status' | 'split_credit'
+  status       String @default("open") // 'open' | 'auto_resolved' | 'escalated' | 'resolved_for_fulcrum' | 'resolved_for_client' | 'withdrawn'
+  evidence     Json   @default("{}")
+  clientReason String @map("client_reason")
+
+  // Resolution
+  resolution       String?   @map("resolution")
+  resolvedBy       String?   @map("resolved_by") // 'auto' | 'joe' | 'client_withdrew'
+  resolvedAt       DateTime? @map("resolved_at")
+  adjustmentAmount Decimal?  @map("adjustment_amount") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tracker CommissionTracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("disputes")
+}
+
+// ============================================================================
+// CLAWBACKS (commission reversal records)
+// ============================================================================
+model Clawback {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @map("tenant_id") @db.Uuid
+  trackerId String @map("tracker_id") @db.Uuid
+
+  triggerType      String   @map("trigger_type") // 'cancellation' | 'refund' | 'churn' | 'deal_reversal' | 'invoice_void'
+  triggerDate      DateTime @map("trigger_date")
+  originalAmount   Decimal  @map("original_amount") @db.Decimal(12, 2)
+  clawbackAmount   Decimal  @map("clawback_amount") @db.Decimal(12, 2)
+  clawbackRate     Decimal  @map("clawback_rate") @db.Decimal(5, 4) // 1.0000 = full
+  daysSincePayment Int      @map("days_since_payment")
+  policyApplied    String   @map("policy_applied") // 'full' | 'prorated' | 'none'
+
+  // Offset tracking
+  offsetQuarterKey String?   @map("offset_quarter_key")
+  offsetApplied    Boolean   @default(false) @map("offset_applied")
+  offsetAppliedAt  DateTime? @map("offset_applied_at")
+
+  status    String   @default("pending") // 'pending' | 'applied' | 'offset' | 'waived'
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tracker CommissionTracker @relation(fields: [trackerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("clawbacks")
+}
+
+// ============================================================================
+// PRE-EXISTING DEALS (initial audit baseline for ICM)
+// ============================================================================
+model PreExistingDeal {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  crmDealId    String  @map("crm_deal_id")
+  dealName     String? @map("deal_name")
+  dealValue    Decimal @map("deal_value") @db.Decimal(12, 2)
+  customerName String? @map("customer_name")
+
+  // Audit status
+  discoveredAt DateTime @default(now()) @map("discovered_at")
+  source       String   // 'crm_scan' | 'erp_scan'
+  status       String   @default("ineligible") // 'ineligible' | 'appealed' | 'appeal_approved' | 'appeal_denied'
+
+  // Appeal
+  appealReason     String?   @map("appeal_reason")
+  appealedAt       DateTime? @map("appealed_at")
+  appealResolvedAt DateTime? @map("appeal_resolved_at")
+  appealResolvedBy String?   @map("appeal_resolved_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, crmDealId])
+  @@index([tenantId])
+  @@map("pre_existing_deals")
+}
+
+// ============================================================================
+// SERVICE PROFILES (service economics for EVS calculation)
+// ============================================================================
+model ServiceProfile {
+  id             String  @id @default(uuid()) @db.Uuid
+  tenantId       String  @map("tenant_id") @db.Uuid
+  name           String // "Fractional COO", "CRM Migration"
+  ltv            Decimal @db.Decimal(12, 2) // lifetime value
+  cac            Decimal @db.Decimal(12, 2) // cost to acquire
+  margin         Decimal @db.Decimal(5, 4) // gross margin 0-1
+  dealSize       Decimal @map("deal_size") @db.Decimal(12, 2)
+  closeRate      Decimal @map("close_rate") @db.Decimal(5, 4) // e.g. 0.0500 = 5%
+  salesCycleDays Int     @default(45) @map("sales_cycle_days")
+  isActive       Boolean @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contentAssets ContentAsset[]
+
+  @@index([tenantId])
+  @@map("service_profiles")
+}
+
+// ============================================================================
+// CONTENT ASSETS (revenue assets with EVS scoring and ROI tracking)
+// ============================================================================
+model ContentAsset {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  serviceId            String?  @map("service_id") @db.Uuid
+  title                String
+  slug                 String
+  url                  String?
+  evs                  Decimal  @default(0) @db.Decimal(5, 2) // Economic Value Score 0-100
+  evsInputs            Json     @default("{}") @map("evs_inputs") // snapshot of calculation inputs
+  status               String   @default("draft") // 'draft' | 'deployed' | 'refreshing' | 'killed'
+  deployedAt           DateTime? @map("deployed_at")
+  pipelineContribution Decimal  @default(0) @map("pipeline_contribution") @db.Decimal(12, 2)
+  attributedRevenue    Decimal  @default(0) @map("attributed_revenue") @db.Decimal(12, 2)
+  costPerLead          Decimal? @map("cost_per_lead") @db.Decimal(8, 2)
+  monthlyVisits        Int      @default(0) @map("monthly_visits")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service  ServiceProfile?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  snippets PersonaSnippet[]
+  keywords SEOKeywordTracker[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, evs(sort: Desc)])
+  @@map("content_assets")
+}
+
+// ============================================================================
+// PERSONA SNIPPETS (CFO/Director/End-User distribution variants)
+// ============================================================================
+model PersonaSnippet {
+  id       String    @id @default(uuid()) @db.Uuid
+  assetId  String    @map("asset_id") @db.Uuid
+  persona  String // 'cfo' | 'director' | 'end_user'
+  hook     String
+  body     String
+  cta      String
+  channel  String? // 'linkedin' | 'email' | null
+  deployAt DateTime? @map("deploy_at") // staggered schedule
+  deployed Boolean   @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  asset ContentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([deployed, deployAt])
+  @@map("persona_snippets")
+}
+
+// ============================================================================
+// SEO KEYWORD TRACKER (position monitoring + search economics)
+// ============================================================================
+model SEOKeywordTracker {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  assetId        String?  @map("asset_id") @db.Uuid
+  keyword        String
+  position       Int? // current rank
+  prevPosition   Int?     @map("prev_position") // last week rank
+  positionDelta  Int?     @map("position_delta") // change (positive = dropped)
+  impressions    Int      @default(0)
+  clicks         Int      @default(0)
+  ctr            Decimal  @default(0) @db.Decimal(5, 4)
+  searchVolume   Int?     @map("search_volume") // from DataForSEO
+  difficulty     Int? // 0-100
+  conversionRate Decimal? @map("conversion_rate") @db.Decimal(5, 4)
+  checkedAt      DateTime @default(now()) @map("checked_at")
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  asset  ContentAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, keyword])
+  @@index([tenantId, positionDelta(sort: Desc)])
+  @@map("seo_keyword_trackers")
+}
+
+// ============================================================================
+// SEO AUDITS (position drops, cannibalization, refresh briefs)
+// ============================================================================
+model SEOAudit {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  auditType  String    @map("audit_type") // 'position_drop' | 'cannibalization' | 'technical' | 'refresh'
+  severity   String // 'low' | 'medium' | 'high' | 'critical'
+  details    Json      @default("{}")
+  status     String    @default("detected") // 'detected' | 'brief_generated' | 'refreshed' | 'resolved'
+  briefJson  Json?     @map("brief_json") // auto-generated refresh brief
+  createdAt  DateTime  @default(now()) @map("created_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, severity])
+  @@map("seo_audits")
+}
+
+// ============================================================================
+// CRO AUDITS (website conversion optimization analysis)
+// ============================================================================
+model CROAudit {
+  id                      String   @id @default(uuid()) @db.Uuid
+  tenantId                String   @map("tenant_id") @db.Uuid
+  pageUrl                 String   @map("page_url")
+  pageType                String   @map("page_type") // 'homepage' | 'service' | 'pricing' | 'contact' | 'blog' | 'case_study'
+  metrics                 Json     @default("{}") // bounce_rate, time_on_page, scroll_depth, cta_click_rate, conversion_rate
+  benchmarks              Json     @default("{}") // industry benchmarks for comparison
+  issues                  Json     @default("[]") // detected friction points
+  recommendations         Json     @default("[]") // prioritized fixes with est. pipeline impact
+  estimatedPipelineImpact Decimal? @map("estimated_pipeline_impact") @db.Decimal(12, 2)
+  auditedAt               DateTime @default(now()) @map("audited_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, pageType])
+  @@map("cro_audits")
+}
+
+// ============================================================================
+// A/B TESTS (conversion optimization experiments)
+// ============================================================================
+model ABTest {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  pageUrl      String    @map("page_url")
+  hypothesis   String
+  controlDesc  String    @map("control_desc")
+  variantDesc  String    @map("variant_desc")
+  status       String    @default("queued") // 'queued' | 'running' | 'completed' | 'cancelled'
+  priority     String    @default("medium") // 'low' | 'medium' | 'high'
+  expectedLift Decimal?  @map("expected_lift") @db.Decimal(5, 2)
+  actualLift   Decimal?  @map("actual_lift") @db.Decimal(5, 2)
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  resultsJson  Json?     @map("results_json")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("ab_tests")
+}
