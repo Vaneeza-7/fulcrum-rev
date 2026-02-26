@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/diagnostics",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/icm",
@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/health",
-      "schedule": "0 */12 * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/weekly-digest",

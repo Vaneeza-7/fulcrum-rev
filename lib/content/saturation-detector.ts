@@ -67,7 +67,7 @@ export async function detectSaturation(
 
   // Signal 2: Traffic Plateau
   // Compare total visits over last 90 days in 30-day buckets
-  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const _sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
   const allServiceAssets = await prisma.contentAsset.findMany({
     where: { tenantId, serviceId, status: 'deployed' },
   });

@@ -1,5 +1,5 @@
 import { prisma, auditLog } from '@/lib/db';
-import { ClawbackTrigger, ClawbackCalculation, RSATerms, ClawbackPolicy } from './types';
+import { ClawbackTrigger, ClawbackCalculation, ClawbackPolicy } from './types';
 
 /**
  * Clawback Manager — handles deal reversals, refunds, and cancellations.

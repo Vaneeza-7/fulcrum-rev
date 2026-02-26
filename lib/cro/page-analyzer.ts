@@ -87,7 +87,7 @@ Monthly visitors: ${pageMetrics.sessions}`;
  * Checks for: logos, testimonials, video testimonials, case studies,
  * security badges, urgency signals.
  */
-export async function runTrustSignalAudit(tenantId: string): Promise<TrustSignalAudit[]> {
+export async function runTrustSignalAudit(_tenantId: string): Promise<TrustSignalAudit[]> {
   // Trust signal audit is a checklist-based assessment.
   // In production, this would crawl the actual pages. For now, we generate
   // a standard checklist that gets populated during CRO audits.

@@ -113,7 +113,7 @@ export function calculateProfitabilityScore(service: {
  */
 export function allocateContentSlots(
   services: ProfitabilityScore[],
-  totalSlots: number
+  _totalSlots: number
 ): ProfitabilityScore[] {
   const totalScore = services.reduce((sum, s) => sum + s.score, 0);
   if (totalScore === 0) return services;

@@ -10,7 +10,7 @@ import { getSlackClient } from '@/lib/slack/client';
 import { buildReconciliationSummaryBlocks, buildCommissionAlertBlocks } from '@/lib/slack/blocks';
 import { jobLogger } from '@/lib/logger';
 
-const log = jobLogger('icm_reconciliation');
+const _log = jobLogger('icm_reconciliation');
 
 /**
  * ICM Reconciliation Job — runs daily for performance-based tenants.

@@ -27,3 +27,19 @@ export interface SlackDealAlert {
   stalled_reason: string;
   suggested_action: string;
 }
+
+export interface MonitoringAlert {
+  alert_id: string;
+  resource_id: string;
+  resource_name: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  trigger_reason: string;
+  execution_count: number;
+  burst_threshold: number;
+  error_count: number;
+  baseline_hourly: number | null;
+  risk_tier: string;
+  details_extra?: string;
+  detected_at: string;
+  workflow_editor_url?: string;
+}

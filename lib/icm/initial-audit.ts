@@ -1,6 +1,6 @@
 import { prisma, auditLog } from '@/lib/db';
 import { CRMConnector } from '@/lib/crm/base-connector';
-import { AuditBaseline, ClosedWonDeal } from './types';
+import { AuditBaseline } from './types';
 
 /**
  * Initial Audit — establishes a baseline of pre-existing deals when ICM is first enabled.

@@ -3,6 +3,7 @@ import { CRMFactory } from '@/lib/crm/factory';
 import { CRMAuthConfig } from '@/lib/crm/types';
 import { sendLeadReviewThread } from './client';
 import { SlackLeadCard } from './types';
+import * as monitoringDb from '@/lib/monitoring-db';
 
 /**
  * Handle "Push All A+" button click.
@@ -164,4 +165,38 @@ export async function handleRejectGrade(tenantId: string, grades: string[]): Pro
 
   await auditLog(tenantId, 'leads_bulk_rejected', undefined, { grades, count: result.count });
   return result.count;
+}
+
+/**
+ * Handle "Dismiss" button on a monitoring alert.
+ */
+export async function handleMonitoringDismiss(
+  alertId: string,
+  resourceId: string,
+  userId: string
+): Promise<void> {
+  await monitoringDb.dismissAlert(alertId, userId);
+}
+
+/**
+ * Handle "Acknowledge" button on a monitoring alert.
+ */
+export async function handleMonitoringAck(
+  alertId: string,
+  resourceId: string,
+  userId: string
+): Promise<void> {
+  await monitoringDb.acknowledgeAlert(alertId, userId);
+}
+
+/**
+ * Handle "Suppress Resource" button on a monitoring alert.
+ */
+export async function handleMonitoringSuppress(
+  alertId: string,
+  resourceId: string,
+  resourceName: string,
+  userId: string
+): Promise<void> {
+  await monitoringDb.suppressResource(resourceId, resourceName, userId);
 }

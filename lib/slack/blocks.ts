@@ -1,6 +1,6 @@
-import { SlackLeadCard, SlackPipelineSummary, SlackDealAlert } from './types';
+import { SlackLeadCard, SlackPipelineSummary, SlackDealAlert, MonitoringAlert } from './types';
 import { SlackCommissionAlert, SlackReconciliationSummary } from '@/lib/icm/types';
-import type { MonthlyContentReport, ContentAllocation } from '@/lib/content/types';
+import type { MonthlyContentReport } from '@/lib/content/types';
 import type { PersonaSnippet } from '@prisma/client';
 
 /**
@@ -600,4 +600,128 @@ export function buildSaturationAlertBlocks(alert: {
   }
 
   return blocks;
+}
+
+/**
+ * Build Slack blocks for monitoring/blast radius alerts with interactive buttons.
+ */
+export function buildMonitoringAlertBlocks(alert: MonitoringAlert) {
+  const severityEmoji: Record<string, string> = {
+    CRITICAL: ':rotating_light:',
+    HIGH: ':warning:',
+    MEDIUM: ':large_yellow_circle:',
+    LOW: ':large_blue_circle:',
+  };
+  const emoji = severityEmoji[alert.severity] ?? ':grey_question:';
+
+  const blocks: unknown[] = [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `${emoji} Blast Radius Alert: ${alert.severity}` },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Resource:* ${alert.resource_name}\n*ID:* \`${alert.resource_id}\`\n*Risk Tier:* ${alert.risk_tier}\n*Trigger:* ${alert.trigger_reason}`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Executions (5min):*\n${alert.execution_count}` },
+        { type: 'mrkdwn', text: `*Burst Threshold:*\n${alert.burst_threshold}` },
+        { type: 'mrkdwn', text: `*Errors:*\n${alert.error_count}` },
+        { type: 'mrkdwn', text: `*Baseline (hourly):*\n${alert.baseline_hourly ?? 'N/A'}` },
+      ],
+    },
+  ];
+
+  if (alert.details_extra) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Details:* ${alert.details_extra}` },
+    });
+  }
+
+  if (alert.workflow_editor_url) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:link: *Investigate:*\n• <${alert.workflow_editor_url}|Open in n8n Editor>`,
+      },
+    });
+  }
+
+  const buttonValue = JSON.stringify({
+    alert_id: alert.alert_id,
+    resource_id: alert.resource_id,
+    resource_name: alert.resource_name,
+  });
+
+  blocks.push({
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Dismiss' },
+        action_id: 'monitoring_dismiss',
+        value: buttonValue,
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Acknowledge' },
+        action_id: 'monitoring_ack',
+        value: buttonValue,
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'Suppress Resource' },
+        action_id: 'monitoring_suppress',
+        value: buttonValue,
+        style: 'danger',
+      },
+    ],
+  });
+
+  blocks.push({
+    type: 'context',
+    elements: [
+      { type: 'mrkdwn', text: `Alert #${alert.alert_id} | ${alert.detected_at}` },
+    ],
+  });
+
+  return blocks;
+}
+
+/**
+ * Build replacement blocks after a monitoring alert has been acted on.
+ */
+export function buildMonitoringResolvedBlocks(
+  alert: MonitoringAlert,
+  action: 'dismissed' | 'acknowledged' | 'suppressed',
+  actorName: string
+) {
+  const actionLabels: Record<string, string> = {
+    dismissed: ':white_check_mark: Dismissed',
+    acknowledged: ':eyes: Acknowledged',
+    suppressed: ':no_entry_sign: Resource Suppressed',
+  };
+
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `~${alert.severity}: ${alert.resource_name} — ${alert.trigger_reason}~\n${actionLabels[action]} by <@${actorName}> at <!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} {time}|${new Date().toISOString()}>`,
+      },
+    },
+    {
+      type: 'context',
+      elements: [
+        { type: 'mrkdwn', text: `Alert #${alert.alert_id} | Blast Radius Containment Engine` },
+      ],
+    },
+  ];
 }

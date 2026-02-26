@@ -12,7 +12,7 @@ import { ClosedWonDeal, AttributionProof, TrackerStatus } from './types';
  * 4. Build attribution proof linking the deal back to Fulcrum's lead discovery
  */
 
-const FUZZY_MATCH_THRESHOLD = 0.85;
+const _FUZZY_MATCH_THRESHOLD = 0.85;
 
 /**
  * Process a batch of closed-won deals from CRM scan.

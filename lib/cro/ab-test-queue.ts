@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { askClaudeJson } from '@/lib/ai/claude';
-import { ABTestHypothesis, CROAnalysisResult } from './types';
+import { ABTestHypothesis } from './types';
 
 /**
  * A/B Test Queue — generates, prioritizes, and manages conversion experiments.
