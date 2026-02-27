@@ -14,8 +14,25 @@ export const metadata = {
 }
 
 export default async function DashboardPage() {
-  const { orgId } = await auth()
-  if (!orgId) redirect('/sign-in')
+  let orgId: string | null | undefined = null
+  try {
+    const session = await auth()
+    orgId = session.orgId
+  } catch {
+    // Clerk not configured — show setup message
+  }
+  if (!orgId) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-bold mb-4">Fulcrum</h1>
+          <p className="text-gray-400">
+            Sign in to access your RevOps dashboard.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
