@@ -3,7 +3,9 @@ import { NegativeReason } from '@prisma/client';
 import { jobLogger } from '@/lib/logger';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? '' });
+}
 const log = jobLogger('hitl-processor');
 
 export interface HITLRejectionInput {
@@ -28,7 +30,7 @@ export class HITLProcessor {
     // Generate embedding
     let vector: number[] | null = null;
     try {
-      const embeddingResponse = await openai.embeddings.create({
+      const embeddingResponse = await getOpenAI().embeddings.create({
         model: 'text-embedding-3-small',
         input: textToEmbed,
       });

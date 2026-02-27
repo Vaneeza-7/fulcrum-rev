@@ -2,10 +2,14 @@ import OpenAI from 'openai';
 
 const globalForPerplexity = globalThis as unknown as { perplexity: OpenAI | undefined };
 
-export const perplexity = globalForPerplexity.perplexity ?? new OpenAI({
-  apiKey: process.env.PERPLEXITY_API_KEY,
-  baseURL: 'https://api.perplexity.ai',
-});
+function createPerplexity() {
+  return new OpenAI({
+    apiKey: process.env.PERPLEXITY_API_KEY ?? '',
+    baseURL: 'https://api.perplexity.ai',
+  });
+}
+
+export const perplexity = globalForPerplexity.perplexity ?? createPerplexity();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPerplexity.perplexity = perplexity;
