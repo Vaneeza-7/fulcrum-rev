@@ -1,3 +1,5 @@
+import './globals.css';
+
 export const metadata = {
   title: 'Fulcrum',
   description: 'Revenue Operating System',

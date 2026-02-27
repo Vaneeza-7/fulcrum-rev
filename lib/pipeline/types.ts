@@ -35,6 +35,8 @@ export interface PipelineResult {
   profiles_enriched: number;
   profiles_scored: number;
   first_lines_generated: number;
+  leads_pushed_to_crm: number;
+  crm_push_errors: string[];
   grade_distribution: Record<string, number>;
   errors: string[];
   duration_ms: number;

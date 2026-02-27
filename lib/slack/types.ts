@@ -9,6 +9,7 @@ export interface SlackLeadCard {
   intent_score: number;
   first_line: string;
   linkedin_url: string;
+  crm_lead_id?: string;
 }
 
 export interface SlackPipelineSummary {
@@ -18,6 +19,8 @@ export interface SlackPipelineSummary {
   grade_distribution: Record<string, number>;
   top_leads: SlackLeadCard[];
   errors: string[];
+  zoho_org_id?: string;
+  zoho_leads_url?: string;
 }
 
 export interface SlackDealAlert {

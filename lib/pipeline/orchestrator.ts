@@ -10,6 +10,9 @@ import { ROISourceTagger } from '@/lib/roi/source-tagger';
 import { FulcrumSourceType } from '@prisma/client';
 import { ColdStartGate } from '@/lib/cold-start';
 import { jobLogger } from '@/lib/logger';
+import { pushLeadToCRM } from '@/lib/jobs/crm-push';
+import { sendPipelineSummary } from '@/lib/slack/client';
+import { SlackLeadCard, SlackPipelineSummary } from '@/lib/slack/types';
 
 const log = jobLogger('pipeline-orchestrator');
 
@@ -46,7 +49,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     const msg = `Scraping failed: ${error}`;
     errors.push(msg);
     await auditLog(tenantId, 'pipeline_error', undefined, { stage: 'scrape', error: msg });
-    return buildResult(tenantId, 0, 0, 0, 0, 0, gradeDistribution, errors, startTime);
+    return buildResult(tenantId, 0, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime);
   }
 
   // 2. DEDUP - Filter existing leads
@@ -60,7 +63,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
 
   if (newProfiles.length === 0) {
     await auditLog(tenantId, 'pipeline_completed', undefined, { reason: 'no_new_profiles' });
-    return buildResult(tenantId, profiles.length, 0, 0, 0, 0, gradeDistribution, errors, startTime);
+    return buildResult(tenantId, profiles.length, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime);
   }
 
   // Cold-start check — gate actions for new tenants
@@ -75,6 +78,11 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   let enrichedCount = 0;
   let scoredCount = 0;
   let firstLineCount = 0;
+  const createdLeadRecords: Array<{
+    id: string; fullName: string; title: string; company: string;
+    fulcrumScore: number; fulcrumGrade: string; fitScore: number;
+    intentScore: number; firstLine: string; linkedinUrl: string;
+  }> = [];
 
   // Process each new profile through the pipeline
   for (const profile of newProfiles) {
@@ -143,6 +151,19 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
         },
       });
 
+      createdLeadRecords.push({
+        id: lead.id,
+        fullName: profile.full_name,
+        title: profile.title ?? '',
+        company: profile.company ?? '',
+        fulcrumScore: score.fulcrum_score,
+        fulcrumGrade: score.fulcrum_grade,
+        fitScore: score.fit_score,
+        intentScore: score.intent_score,
+        firstLine,
+        linkedinUrl: profile.linkedin_url,
+      });
+
       // Store intent signals
       if (signals.length > 0) {
         await prisma.intentSignal.createMany({
@@ -178,12 +199,75 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     }
   }
 
+  // 8. AUTO-PUSH high-scoring leads to CRM (B grade and above)
+  let pushedCount = 0;
+  const pushErrors: string[] = [];
+  const crmLeadIds = new Map<string, string>(); // leadId -> crmLeadId
+
+  if (tenant.crmType && tenant.crmConfig) {
+    for (const rec of createdLeadRecords) {
+      if (rec.fulcrumScore >= 60) {
+        try {
+          const result = await pushLeadToCRM(rec.id);
+          if (result.success && result.crmLeadId) {
+            pushedCount++;
+            crmLeadIds.set(rec.id, result.crmLeadId);
+          } else if (result.error) {
+            pushErrors.push(result.error);
+          }
+        } catch (err) {
+          pushErrors.push(`CRM push failed for ${rec.fullName}: ${err}`);
+        }
+      }
+    }
+  }
+
+  // 9. SLACK NOTIFICATION
+  const crmCfg = tenant.crmConfig as Record<string, unknown>;
+  const zohoOrgId = crmCfg?.org_id as string | undefined;
+  const zohoCustomViewUrl = crmCfg?.custom_view_url as string | undefined;
+  const topLeads: SlackLeadCard[] = createdLeadRecords
+    .sort((a, b) => b.fulcrumScore - a.fulcrumScore)
+    .slice(0, 10)
+    .map((l) => ({
+      lead_id: l.id,
+      full_name: l.fullName,
+      title: l.title,
+      company: l.company,
+      fulcrum_score: l.fulcrumScore,
+      fulcrum_grade: l.fulcrumGrade,
+      fit_score: l.fitScore,
+      intent_score: l.intentScore,
+      first_line: l.firstLine,
+      linkedin_url: l.linkedinUrl,
+      crm_lead_id: crmLeadIds.get(l.id),
+    }));
+
+  const slackSummary: SlackPipelineSummary = {
+    tenant_name: tenant.name,
+    profiles_scraped: profiles.length,
+    profiles_new: newProfiles.length,
+    grade_distribution: gradeDistribution,
+    top_leads: topLeads,
+    errors: [...errors, ...pushErrors],
+    zoho_org_id: zohoOrgId,
+    zoho_leads_url: zohoCustomViewUrl
+      ?? (zohoOrgId ? `https://crm.zoho.com/crm/org${zohoOrgId}/tab/Leads` : undefined),
+  };
+
+  try {
+    await sendPipelineSummary(tenantId, slackSummary);
+  } catch (slackErr) {
+    log.error({ err: slackErr }, 'Failed to send Slack pipeline summary');
+  }
+
   await auditLog(tenantId, 'pipeline_completed', undefined, {
     scraped: profiles.length,
     new: newProfiles.length,
     enriched: enrichedCount,
     scored: scoredCount,
     firstLines: firstLineCount,
+    pushedToCrm: pushedCount,
     grades: gradeDistribution,
   });
 
@@ -194,6 +278,8 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     enrichedCount,
     scoredCount,
     firstLineCount,
+    pushedCount,
+    pushErrors,
     gradeDistribution,
     errors,
     startTime
@@ -207,6 +293,8 @@ function buildResult(
   enriched: number,
   scored: number,
   firstLines: number,
+  pushedToCrm: number,
+  crmPushErrors: string[],
   grades: Record<string, number>,
   errors: string[],
   startTime: number
@@ -218,6 +306,8 @@ function buildResult(
     profiles_enriched: enriched,
     profiles_scored: scored,
     first_lines_generated: firstLines,
+    leads_pushed_to_crm: pushedToCrm,
+    crm_push_errors: crmPushErrors,
     grade_distribution: grades,
     errors,
     duration_ms: Date.now() - startTime,

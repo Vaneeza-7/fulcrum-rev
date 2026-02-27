@@ -1,0 +1,71 @@
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/db'
+import { CleanSlateProvider } from '@/components/providers/CleanSlateProvider'
+import { SidebarIntegritySlot } from '@/components/sidebar/SidebarIntegritySlot'
+
+const NAV_ITEMS = [
+  { href: '/', label: 'Dashboard' },
+  { href: '/leads', label: 'Leads' },
+  { href: '/usage', label: 'Usage & ROI' },
+  { href: '/settings', label: 'Settings' },
+]
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const { orgId } = await auth()
+  if (!orgId) redirect('/sign-in')
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+  })
+  if (!tenant) redirect('/onboarding/step-1')
+
+  // Count leads that were paused while credits were zero
+  const cancelledCount = await prisma.lead.count({
+    where: { tenantId: tenant.id, status: 'cancelled_creditzero' },
+  })
+
+  // TODO: Replace with actual credit balance lookup when the credit/billing
+  // system is implemented. Until then the modal stays dormant (creditBalance 0
+  // means useCleanSlate never fires).
+  const creditBalance = 0
+
+  return (
+    <CleanSlateProvider cancelledCount={cancelledCount} creditBalance={creditBalance}>
+      <div className="flex min-h-screen bg-gray-950">
+        {/* Sidebar */}
+        <aside className="hidden md:flex md:w-56 flex-col border-r border-gray-800 bg-gray-950">
+          <div className="px-4 py-5">
+            <span className="text-sm font-bold text-white tracking-wide">Fulcrum</span>
+          </div>
+
+          <nav className="flex-1 space-y-1 px-2">
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="block rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-gray-900 hover:text-white transition-colors"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          {/* System health */}
+          <div className="px-4 py-3 border-t border-gray-800">
+            <SidebarIntegritySlot />
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </CleanSlateProvider>
+  )
+}

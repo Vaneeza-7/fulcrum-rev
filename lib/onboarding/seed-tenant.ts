@@ -226,3 +226,75 @@ export const PULSE_CONFIG: TenantSeedConfig = {
     ],
   },
 };
+
+// ============================================================================
+// FULCRUM COLLECTIVE CONFIGURATION (Agency - Business Optimization / RevOps)
+// ============================================================================
+export const FULCRUM_COLLECTIVE_CONFIG: TenantSeedConfig = {
+  name: 'Fulcrum Collective',
+  slug: 'fulcrum-collective',
+  productType: 'fulcrum_collective',
+  crmType: 'zoho',
+  crmConfig: {},
+  searchQueries: [
+    {
+      queryName: 'CEO/COO Operations Leaders',
+      searchQuery: {
+        keywords: 'CEO OR COO OR "Chief Operating Officer"',
+        industry: 'Professional Services',
+        companySize: '11-200',
+        additionalKeywords: 'operations OR systems OR processes',
+      },
+    },
+    {
+      queryName: 'VP Operations / RevOps',
+      searchQuery: {
+        keywords: 'VP Operations OR "Head of RevOps" OR "Revenue Operations"',
+        industry: 'Software Development',
+        companySize: '11-500',
+        additionalKeywords: 'HubSpot OR Salesforce OR CRM',
+      },
+    },
+    {
+      queryName: 'Founders Seeking Optimization',
+      searchQuery: {
+        keywords: 'Founder OR "Managing Director"',
+        companySize: '11-200',
+        additionalKeywords: 'scaling OR growth OR operational efficiency',
+      },
+    },
+  ],
+  intentKeywords: [
+    { keyword: 'HubSpot optimization', intentScore: 9, category: 'crm' },
+    { keyword: 'CRM implementation help', intentScore: 9, category: 'crm' },
+    { keyword: 'operations bottleneck', intentScore: 8, category: 'operations' },
+    { keyword: 'revenue operations consulting', intentScore: 8, category: 'revops' },
+    { keyword: 'business process automation', intentScore: 7, category: 'automation' },
+    { keyword: 'scaling operations', intentScore: 7, category: 'growth' },
+    { keyword: 'fractional COO', intentScore: 9, category: 'services' },
+    { keyword: 'systems optimization', intentScore: 8, category: 'operations' },
+  ],
+  scoringConfig: {
+    company_size: [
+      { min: 11, max: 200, points: 10 },
+      { min: 201, max: 500, points: 7 },
+      { min: 1, max: 10, points: 3 },
+    ],
+    industry_fit: [
+      { match: 'perfect', points: 8 },
+      { match: 'adjacent', points: 5 },
+      { match: 'neutral', points: 3 },
+    ],
+    role_authority: [
+      { pattern: 'c_level', points: 15 },
+      { pattern: 'vp_director', points: 12 },
+      { pattern: 'manager', points: 7 },
+      { pattern: 'ic', points: 3 },
+    ],
+    revenue_signals: [
+      { signal: 'series_a', points: 7 },
+      { signal: 'seed', points: 5 },
+      { signal: 'budget_season', points: 3 },
+    ],
+  },
+};

@@ -34,7 +34,7 @@ export async function pushLeadToCRM(leadId: string): Promise<{ success: boolean;
         fit_score: Number(lead.fitScore),
         intent_score: Number(lead.intentScore),
         first_line: lead.firstLine ?? '',
-        source: 'Fulcrum',
+        source: `Fulcrum - ${lead.tenant.name}`,
       });
 
       await prisma.lead.update({

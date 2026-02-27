@@ -35,12 +35,37 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
         type: 'mrkdwn',
         text: `*${lead.full_name}* - ${lead.title} at ${lead.company}\nScore: *${lead.fulcrum_score}* (${lead.fulcrum_grade}) | Fit: ${lead.fit_score} | Intent: ${lead.intent_score}\n_${lead.first_line || 'No first line generated'}_`,
       },
-      accessory: {
+    });
+
+    const buttons: unknown[] = [
+      {
         type: 'button',
         text: { type: 'plain_text', text: 'LinkedIn' },
         url: lead.linkedin_url,
-        action_id: 'open_linkedin',
+        action_id: `open_linkedin_${lead.lead_id}`,
       },
+    ];
+
+    if (lead.crm_lead_id && summary.zoho_org_id) {
+      buttons.push({
+        type: 'button',
+        text: { type: 'plain_text', text: 'View in Zoho' },
+        url: `https://crm.zoho.com/crm/org${summary.zoho_org_id}/tab/Leads/${lead.crm_lead_id}`,
+        action_id: `open_zoho_${lead.lead_id}`,
+      });
+    }
+
+    blocks.push({ type: 'actions', elements: buttons });
+  }
+
+  // Per-brand Zoho leads list link
+  if (summary.zoho_leads_url) {
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `<${summary.zoho_leads_url}|View all ${summary.tenant_name} leads in Zoho CRM>`,
+      }],
     });
   }
 
@@ -89,7 +114,39 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
 /**
  * Build a single lead review card with approve/reject buttons.
  */
-export function buildLeadReviewBlocks(lead: SlackLeadCard) {
+export function buildLeadReviewBlocks(lead: SlackLeadCard, zohoOrgId?: string) {
+  const actionElements: unknown[] = [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Approve' },
+      style: 'primary',
+      action_id: 'approve_lead',
+      value: lead.lead_id,
+    },
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Reject' },
+      style: 'danger',
+      action_id: 'reject_lead',
+      value: lead.lead_id,
+    },
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'LinkedIn' },
+      action_id: 'open_linkedin_review',
+      url: lead.linkedin_url,
+    },
+  ];
+
+  if (lead.crm_lead_id && zohoOrgId) {
+    actionElements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: 'View in Zoho' },
+      url: `https://crm.zoho.com/crm/org${zohoOrgId}/tab/Leads/${lead.crm_lead_id}`,
+      action_id: 'open_zoho_review',
+    });
+  }
+
   return [
     {
       type: 'section',
@@ -100,28 +157,7 @@ export function buildLeadReviewBlocks(lead: SlackLeadCard) {
     },
     {
       type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Approve' },
-          style: 'primary',
-          action_id: 'approve_lead',
-          value: lead.lead_id,
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Reject' },
-          style: 'danger',
-          action_id: 'reject_lead',
-          value: lead.lead_id,
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'LinkedIn' },
-          action_id: 'open_linkedin_review',
-          url: lead.linkedin_url,
-        },
-      ],
+      elements: actionElements,
     },
     { type: 'divider' },
   ];
