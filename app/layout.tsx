@@ -1,25 +1,39 @@
 import './globals.css'
-import { ClerkProvider } from '@clerk/nextjs'
+import {
+  ClerkProvider,
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from '@clerk/nextjs'
 
 export const metadata = {
   title: 'Fulcrum',
   description: 'Revenue Operating System',
 }
 
-const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const content = (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
+  return (
+    <ClerkProvider>
+      <html lang="en">
+        <body>
+          <header className="flex items-center gap-4 p-4">
+            <SignedOut>
+              <SignInButton />
+              <SignUpButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   )
-
-  if (!clerkKey) return content
-
-  return <ClerkProvider>{content}</ClerkProvider>
 }
