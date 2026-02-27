@@ -3,6 +3,7 @@ import { askClaude } from '@/lib/ai/claude';
 import { HUCK_PROACTIVE_SUMMARY_PROMPT } from '@/lib/ai/prompts';
 import { getSlackClient } from '@/lib/slack/client';
 import { getDataHealthSummary } from '@/lib/health/data-freshness';
+import { ROIAttributionService } from '@/lib/roi/attribution-service';
 import type { PipelineResult } from '@/lib/pipeline/types';
 import type { SlackDealAlert } from '@/lib/slack/types';
 
@@ -19,6 +20,12 @@ export async function sendDailySummary(
   const slack = await getSlackClient(tenantId);
   if (!slack) return;
 
+  // Fetch ROI data in parallel with report formatting
+  const [roiSummary, topROILeads] = await Promise.all([
+    ROIAttributionService.getTenantROISummary(tenantId),
+    ROIAttributionService.getTopROILeads(tenantId, 5),
+  ]);
+
   const gradeStr = Object.entries(result.grade_distribution)
     .map(([grade, count]) => `${grade}: ${count}`)
     .join(', ');
@@ -28,12 +35,24 @@ export async function sendDailySummary(
     .map((l) => `${l.fullName} at ${l.company ?? 'Unknown'} (${l.fulcrumGrade}, ${l.fulcrumScore})`)
     .join('\n');
 
+  const roiSection = roiSummary.totalLeads > 0
+    ? `Shadow ROI Summary:
+- Fulcrum-sourced leads: ${roiSummary.totalLeads}
+- Total credit invested: ${roiSummary.totalSpend} credits
+- Estimated attributed revenue: $${roiSummary.totalRevenue.toLocaleString()}
+- Average ROI multiplier: ${roiSummary.avgMultiplier.toFixed(1)}x
+Top 5 leads by ROI:
+${topROILeads.map((l) => `- Lead ${l.leadId}: ${l.roiMultiplier.toFixed(1)}x ROI | Stage: ${l.stage || 'Unknown'} | Deal: $${l.estimatedDealValue?.toLocaleString() || 'N/A'}`).join('\n')}`
+    : 'Shadow ROI Summary: No Fulcrum-sourced leads tracked yet. ROI data will appear once the first sync runs.';
+
   const contextForClaude = `Tenant: ${tenantName}
 New leads today: ${result.profiles_new}
 Total scraped: ${result.profiles_scraped}
 Grade breakdown: ${gradeStr}
 Top prospects:\n${topLeadStr}
-Errors: ${result.errors.length > 0 ? result.errors.join(', ') : 'None'}`;
+Errors: ${result.errors.length > 0 ? result.errors.join(', ') : 'None'}
+
+${roiSection}`;
 
   const huckMessage = await askClaude(
     HUCK_PROACTIVE_SUMMARY_PROMPT,

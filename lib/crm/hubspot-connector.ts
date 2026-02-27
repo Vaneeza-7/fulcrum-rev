@@ -262,6 +262,32 @@ export class HubSpotConnector extends CRMConnector {
     return true;
   }
 
+  async getLeadDealValue(externalLeadId: string): Promise<{
+    estimatedDealValue: number | null;
+    stage: string | null;
+    currencyCode: string;
+  } | null> {
+    try {
+      // Fetch contact with deal-related properties
+      const contact = await this.request(
+        'GET',
+        `/crm/v3/objects/contacts/${externalLeadId}?properties=hs_deal_amount,lifecyclestage`
+      ) as { properties: Record<string, string | null> };
+
+      const amount = contact.properties.hs_deal_amount
+        ? parseFloat(contact.properties.hs_deal_amount)
+        : null;
+
+      return {
+        estimatedDealValue: amount,
+        stage: contact.properties.lifecyclestage ?? null,
+        currencyCode: 'USD',
+      };
+    } catch {
+      return null;
+    }
+  }
+
   protected getFieldMapping(): CRMFieldMapping {
     return {
       first_name: 'firstname',

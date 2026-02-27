@@ -217,6 +217,33 @@ export class ZohoConnector extends CRMConnector {
     return true;
   }
 
+  async getLeadDealValue(externalLeadId: string): Promise<{
+    estimatedDealValue: number | null;
+    stage: string | null;
+    currencyCode: string;
+  } | null> {
+    try {
+      const result = await this.request('GET', `/Leads/${externalLeadId}`) as {
+        data?: Array<Record<string, unknown>>;
+      };
+
+      const lead = result.data?.[0];
+      if (!lead) return null;
+
+      const expectedRevenue = lead.Expected_Revenue != null
+        ? Number(lead.Expected_Revenue)
+        : null;
+
+      return {
+        estimatedDealValue: expectedRevenue,
+        stage: lead.Lead_Status ? String(lead.Lead_Status) : null,
+        currencyCode: lead.Currency ? String(lead.Currency) : 'USD',
+      };
+    } catch {
+      return null;
+    }
+  }
+
   protected getFieldMapping(): CRMFieldMapping {
     return {
       first_name: 'First_Name',

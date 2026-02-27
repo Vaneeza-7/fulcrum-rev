@@ -1,4 +1,4 @@
-import type { Tenant, Lead, DealDiagnostic, SystemHealthCheck } from '@prisma/client';
+import type { Tenant, Lead, DealDiagnostic, SystemHealthCheck, NegativeReason } from '@prisma/client';
 
 // ============================================================================
 // INTENT CLASSIFICATION
@@ -68,7 +68,8 @@ export type HuckAction =
   | { type: 'run_pipeline'; tenantId: string }
   | { type: 'create_task'; dealId: string; task: string }
   | { type: 'check_crm'; tenantId: string }
-  | { type: 'reject_lead'; leadId: string; reason: string };
+  | { type: 'reject_lead'; leadId: string; reason: string; rejectReason?: NegativeReason; rejectedBy?: string }
+  | { type: 'reject_brand_suggestion'; brandSuggestionId: string; reason?: string; rejectedBy?: string };
 
 // ============================================================================
 // CONVERSATION

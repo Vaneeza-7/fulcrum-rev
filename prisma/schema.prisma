@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ============================================================================
@@ -60,6 +61,13 @@ model Tenant {
   seoAudits            SEOAudit[]
   croAudits            CROAudit[]
   abTests              ABTest[]
+  signalWeights        SignalWeight[]
+  brandSuggestions     BrandSuggestion[]
+  onboardingState      TenantOnboardingState?
+  modelCalibrations    ModelCalibration[]
+  fulcrumSourceTags    FulcrumSourceTag[]
+  roiAttributions      ROIAttribution[]
+  negativeSignals      NegativeSignal[]
 
   @@map("tenants")
 }
@@ -110,8 +118,9 @@ model Lead {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  intentSignals IntentSignal[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  intentSignals    IntentSignal[]
+  fulcrumSourceTag FulcrumSourceTag?
 
   @@unique([tenantId, linkedinUrl])
   @@index([tenantId])
@@ -288,7 +297,7 @@ model ConversationMessage {
 }
 
 // ============================================================================
-// ONBOARDING WORKFLOWS (enterprise tenant onboarding tracking)
+// ONBOARDING WORKFLOWS — Legacy, unused. See TenantOnboardingState for cold-start tracking.
 // ============================================================================
 model OnboardingWorkflow {
   id          String   @id @default(uuid()) @db.Uuid
@@ -694,4 +703,173 @@ model ABTest {
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("ab_tests")
+}
+
+enum FulcrumSourceType {
+  RESEARCHER_DISCOVERY
+  ICP_MATCH
+  SIGNAL_TRIGGERED
+  RESURRECTION
+}
+
+model FulcrumSourceTag {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  leadId          String            @unique @map("lead_id") @db.Uuid
+  fulcrumSourceId String            @unique @map("fulcrum_source_id")
+  sourceType      FulcrumSourceType @map("source_type")
+  taggedAt        DateTime          @default(now()) @map("tagged_at")
+  roiAttribution  ROIAttribution?
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead            Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([fulcrumSourceId])
+  @@map("fulcrum_source_tags")
+}
+
+model ROIAttribution {
+  id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @map("tenant_id") @db.Uuid
+  fulcrumSourceTagId   String           @unique @map("fulcrum_source_tag_id") @db.Uuid
+  leadId               String           @map("lead_id") @db.Uuid
+  estimatedDealValue   Float?           @map("estimated_deal_value")
+  attributedRevenue    Float            @default(0) @map("attributed_revenue")
+  totalCreditSpend     Float            @default(0) @map("total_credit_spend")
+  roiMultiplier        Float            @default(0) @map("roi_multiplier")
+  stage                String?
+  lastSyncedAt         DateTime?        @map("last_synced_at")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceTag            FulcrumSourceTag @relation(fields: [fulcrumSourceTagId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@map("roi_attributions")
+}
+
+enum NegativeReason {
+  WRONG_ICP
+  BAD_TIMING
+  ALREADY_CUSTOMER
+  COMPETITOR
+  NOT_INTERESTED
+  BRAND_MISMATCH
+  OTHER
+}
+
+model NegativeSignal {
+  id                String                        @id @default(uuid()) @db.Uuid
+  tenantId          String                        @map("tenant_id") @db.Uuid
+  leadId            String?                       @map("lead_id") @db.Uuid
+  brandSuggestionId String?                       @map("brand_suggestion_id") @db.Uuid
+  rejectReason      NegativeReason                @map("reject_reason")
+  rejectReasonRaw   String?                       @map("reject_reason_raw")
+  reasonVector      Unsupported("vector(1536)")?  @map("reason_vector")
+  appliedToModel    Boolean                       @default(false) @map("applied_to_model")
+  appliedAt         DateTime?                     @map("applied_at")
+  createdAt         DateTime                      @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, appliedToModel])
+  @@map("negative_signals")
+}
+
+// ============================================================================
+// SIGNAL WEIGHTS (per-tenant scoring weights with vector embeddings for HITL)
+// ============================================================================
+model SignalWeight {
+  id             String                        @id @default(uuid()) @db.Uuid
+  tenantId       String                        @map("tenant_id") @db.Uuid
+  signalKey      String                        @map("signal_key") // e.g. 'company_size_large', 'industry_fit_perfect'
+  signalLabel    String                        @map("signal_label") // human-readable description
+  currentWeight  Decimal                       @map("current_weight") @db.Decimal(5, 2)
+  originalWeight Decimal                       @map("original_weight") @db.Decimal(5, 2)
+  signalVector   Unsupported("vector(1536)")?  @map("signal_vector")
+  lastAdjustedAt DateTime?                     @map("last_adjusted_at")
+  createdAt      DateTime                      @default(now()) @map("created_at")
+  updatedAt      DateTime                      @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, signalKey])
+  @@index([tenantId])
+  @@map("signal_weights")
+}
+
+// ============================================================================
+// BRAND SUGGESTIONS (brand evolution agent recommendations)
+// ============================================================================
+model BrandSuggestion {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  content    String    // the suggestion text/description
+  category   String?   // e.g. 'messaging', 'positioning', 'visual'
+  status     String    @default("PENDING") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  rejectedAt DateTime? @map("rejected_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("brand_suggestions")
+}
+
+// ============================================================================
+// COLD-START EXIT REASONS
+// ============================================================================
+enum ColdStartExitReason {
+  STATISTICAL_SIGNIFICANCE_REACHED
+  MANUAL_OVERRIDE_BY_ADMIN
+  EXPIRY_30_DAYS
+}
+
+// ============================================================================
+// TENANT ONBOARDING STATE (cold-start tracking per tenant)
+// ============================================================================
+model TenantOnboardingState {
+  id                      String               @id @default(uuid()) @db.Uuid
+  tenantId                String               @unique @map("tenant_id") @db.Uuid
+  coldStartActive         Boolean              @default(true) @map("cold_start_active")
+  coldStartStartedAt      DateTime             @default(now()) @map("cold_start_started_at")
+  coldStartExpiresAt      DateTime             @map("cold_start_expires_at") // set to coldStartStartedAt + 30 days on creation
+  confidenceFloorBoost    Float                @default(0.20) @map("confidence_floor_boost")
+  requiresManualApproval  Boolean              @default(true) @map("requires_manual_approval")
+  calibrationSignificance Float                @default(0.0) @map("calibration_significance")
+  exitedColdStartAt       DateTime?            @map("exited_cold_start_at")
+  exitReason              ColdStartExitReason? @map("exit_reason")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([coldStartActive])
+  @@map("tenant_onboarding_states")
+}
+
+// ============================================================================
+// MODEL CALIBRATION (tracks scoring model performance per tenant)
+// ============================================================================
+model ModelCalibration {
+  id                       String   @id @default(uuid()) @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  statisticalSignificance  Float    @default(0.0) @map("statistical_significance")
+  sampleSize               Int      @default(0) @map("sample_size")
+  accuracy                 Float    @default(0.0)
+  precision                Float    @default(0.0)
+  recall                   Float    @default(0.0)
+  notes                    String?
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("model_calibrations")
 }

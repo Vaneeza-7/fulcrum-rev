@@ -6,6 +6,12 @@ import { detectSignals } from './signal-detector';
 import { scoreLead } from './scorer';
 import { generateFirstLine } from './first-line';
 import { PipelineResult } from './types';
+import { ROISourceTagger } from '@/lib/roi/source-tagger';
+import { FulcrumSourceType } from '@prisma/client';
+import { ColdStartGate } from '@/lib/cold-start';
+import { jobLogger } from '@/lib/logger';
+
+const log = jobLogger('pipeline-orchestrator');
 
 /**
  * Run the full lead generation pipeline for a single tenant.
@@ -57,6 +63,15 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     return buildResult(tenantId, profiles.length, 0, 0, 0, 0, gradeDistribution, errors, startTime);
   }
 
+  // Cold-start check — gate actions for new tenants
+  const coldStartStatus = await ColdStartGate.getStatus(tenantId);
+  if (coldStartStatus.isActive) {
+    log.info(
+      { tenantId, daysRemaining: coldStartStatus.daysRemaining, confidenceFloorBoost: coldStartStatus.confidenceFloorBoost },
+      'Cold-start active: leads will require manual approval',
+    );
+  }
+
   let enrichedCount = 0;
   let scoredCount = 0;
   let firstLineCount = 0;
@@ -89,6 +104,14 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
         if (firstLine) firstLineCount++;
       }
 
+      // Cold-start confidence adjustment
+      const adjustedConfidence = coldStartStatus.isActive
+        ? ColdStartGate.applyConfidenceBoost(score.fulcrum_score / 100, coldStartStatus.confidenceFloorBoost)
+        : score.fulcrum_score / 100;
+
+      // In cold-start: all leads require manual approval
+      const leadStatus = coldStartStatus.isActive ? 'awaiting_approval' : 'pending_review';
+
       // 7. STORE - Create lead record
       const lead = await prisma.lead.create({
         data: {
@@ -105,11 +128,18 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
           intentScore: score.intent_score,
           fulcrumScore: score.fulcrum_score,
           fulcrumGrade: score.fulcrum_grade,
-          scoreBreakdown: score.breakdown as any,
+          scoreBreakdown: {
+            ...(score.breakdown as any),
+            ...(coldStartStatus.isActive ? {
+              coldStartFlag: true,
+              coldStartReason: 'Cold-start: manual approval required',
+              adjustedConfidence,
+            } : {}),
+          },
           scoredAt: new Date(),
           firstLine: firstLine || null,
           firstLineGeneratedAt: firstLine ? new Date() : null,
-          status: 'pending_review',
+          status: leadStatus,
         },
       });
 
@@ -125,6 +155,21 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
             detectedAt: new Date(s.detected_at),
           })),
         });
+      }
+
+      // Tag lead as Fulcrum-sourced for ROI attribution.
+      // Pipeline-discovered leads are RESEARCHER_DISCOVERY by default.
+      // Other agents (ICP Analyst, Signal Intelligence, Resurrection) will
+      // call tagLead with their respective FulcrumSourceType when they exist.
+      try {
+        await ROISourceTagger.tagLead({
+          tenantId,
+          tenantSlug: tenant.slug,
+          leadId: lead.id,
+          sourceType: FulcrumSourceType.RESEARCHER_DISCOVERY,
+        });
+      } catch (tagError) {
+        console.error(`[Pipeline] ROI source tagging failed for ${lead.id}:`, tagError);
       }
     } catch (error) {
       const msg = `Failed processing ${profile.full_name}: ${error}`;

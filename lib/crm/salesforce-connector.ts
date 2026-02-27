@@ -259,6 +259,28 @@ export class SalesforceConnector extends CRMConnector {
     return true;
   }
 
+  async getLeadDealValue(externalLeadId: string): Promise<{
+    estimatedDealValue: number | null;
+    stage: string | null;
+    currencyCode: string;
+  } | null> {
+    try {
+      const records = await this.query<{ Amount: number | null; StageName: string | null; CurrencyIsoCode?: string }>(
+        `SELECT Amount, StageName, CurrencyIsoCode FROM Opportunity WHERE ContactId = '${externalLeadId.replace(/'/g, "\\'")}' ORDER BY Amount DESC NULLS LAST LIMIT 1`
+      );
+
+      if (records.length === 0) return null;
+
+      return {
+        estimatedDealValue: records[0].Amount ?? null,
+        stage: records[0].StageName ?? null,
+        currencyCode: records[0].CurrencyIsoCode ?? 'USD',
+      };
+    } catch {
+      return null;
+    }
+  }
+
   protected getFieldMapping(): CRMFieldMapping {
     return {
       first_name: 'FirstName',

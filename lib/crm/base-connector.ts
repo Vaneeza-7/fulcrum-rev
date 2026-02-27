@@ -43,6 +43,13 @@ export abstract class CRMConnector {
   /** Send an email through the CRM. */
   abstract sendEmail(to: string, subject: string, body: string, dealId?: string): Promise<boolean>;
 
+  /** Get deal value and stage for a lead by its external CRM lead ID. Returns null if not found. */
+  abstract getLeadDealValue(externalLeadId: string): Promise<{
+    estimatedDealValue: number | null;
+    stage: string | null;
+    currencyCode: string;
+  } | null>;
+
   /** CRM-specific field name mappings. */
   protected abstract getFieldMapping(): CRMFieldMapping;
 

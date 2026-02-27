@@ -1,5 +1,6 @@
 import { prisma, auditLog } from '@/lib/db';
 import { handlePushAllAPlus, handleApproveLead, handleRejectLead } from '@/lib/slack/handlers';
+import { BrandEvolutionAgent } from '@/lib/huck/brand-evolution';
 import { runPipelineForTenant } from '@/lib/pipeline/orchestrator';
 import { runHealthChecks } from '@/lib/health/crm-health';
 import { CRMFactory } from '@/lib/crm/factory';
@@ -37,8 +38,17 @@ export async function executeActions(
           break;
 
         case 'reject_lead':
-          await handleRejectLead(tenantId, action.leadId, action.reason);
+          await handleRejectLead(tenantId, action.leadId, action.reason, action.rejectReason, action.rejectedBy);
           await auditLog(tenantId, 'huck_action_reject_lead', action.leadId);
+          break;
+
+        case 'reject_brand_suggestion':
+          await BrandEvolutionAgent.handleBrandSuggestionRejection({
+            tenantId,
+            brandSuggestionId: action.brandSuggestionId,
+            rejectedBy: action.rejectedBy ?? 'huck',
+            rejectReasonRaw: action.reason,
+          });
           break;
 
         case 'create_task': {

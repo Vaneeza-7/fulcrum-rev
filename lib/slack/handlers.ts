@@ -4,6 +4,8 @@ import { CRMAuthConfig } from '@/lib/crm/types';
 import { sendLeadReviewThread } from './client';
 import { SlackLeadCard } from './types';
 import * as monitoringDb from '@/lib/monitoring-db';
+import { HITLProcessor } from '@/lib/hitl/hitl-processor';
+import { NegativeReason } from '@prisma/client';
 
 /**
  * Handle "Push All A+" button click.
@@ -108,7 +110,13 @@ export async function handleApproveLead(tenantId: string, leadId: string): Promi
 /**
  * Handle "Reject" button on a single lead.
  */
-export async function handleRejectLead(tenantId: string, leadId: string, reason?: string): Promise<void> {
+export async function handleRejectLead(
+  tenantId: string,
+  leadId: string,
+  reason?: string,
+  rejectReason?: NegativeReason,
+  rejectedBy?: string,
+): Promise<void> {
   await prisma.lead.update({
     where: { id: leadId },
     data: {
@@ -118,6 +126,35 @@ export async function handleRejectLead(tenantId: string, leadId: string, reason?
   });
 
   await auditLog(tenantId, 'lead_rejected', leadId, { reason });
+
+  // Create NegativeSignal for HITL feedback loop
+  await HITLProcessor.processRejection({
+    tenantId,
+    leadId,
+    rejectReason: rejectReason ?? NegativeReason.OTHER,
+    rejectReasonRaw: reason,
+    rejectedBy: rejectedBy ?? 'slack_user',
+  });
+}
+
+/**
+ * Handle rejection of a brand suggestion.
+ */
+export async function handleRejectBrandSuggestion(
+  tenantId: string,
+  brandSuggestionId: string,
+  reason?: string,
+  rejectedBy?: string,
+): Promise<void> {
+  await HITLProcessor.processRejection({
+    tenantId,
+    brandSuggestionId,
+    rejectReason: NegativeReason.BRAND_MISMATCH,
+    rejectReasonRaw: reason,
+    rejectedBy: rejectedBy ?? 'slack_user',
+  });
+
+  await auditLog(tenantId, 'brand_suggestion_rejected', brandSuggestionId, { reason });
 }
 
 /**

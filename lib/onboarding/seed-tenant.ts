@@ -1,4 +1,5 @@
 import { prisma } from '../db';
+import { initializeColdStart } from '@/lib/cold-start';
 
 export interface TenantSeedConfig {
   name: string;
@@ -69,6 +70,13 @@ export async function seedTenant(config: TenantSeedConfig): Promise<string> {
       configData: config.scoringConfig[type] as any,
     })),
   });
+
+  // Initialize cold-start state (non-fatal — tenant creation must not fail)
+  try {
+    await initializeColdStart(tenant.id);
+  } catch (err) {
+    console.error(`[seed-tenant] Failed to initialize cold-start for ${tenant.id}:`, err);
+  }
 
   console.log(`Tenant "${config.name}" seeded with ID: ${tenant.id}`);
   return tenant.id;
