@@ -3,7 +3,7 @@ import { withRetry } from '@/lib/retry';
 
 const globalForClaude = globalThis as unknown as { claude: Anthropic | undefined };
 
-export const claude = globalForClaude.claude ?? new Anthropic({ baseUrl: "http://localhost:4034/v1/" });
+export const claude = globalForClaude.claude ?? new Anthropic();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForClaude.claude = claude;
