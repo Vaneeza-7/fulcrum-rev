@@ -18,6 +18,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const hasClerkKey = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+  if (!hasClerkKey) {
+    return (
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    )
+  }
+
   return (
     <ClerkProvider>
       <html lang="en">
