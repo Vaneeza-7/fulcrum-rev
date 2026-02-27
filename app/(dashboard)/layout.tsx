@@ -16,8 +16,19 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { orgId } = await auth()
-  if (!orgId) redirect('/sign-in')
+  let orgId: string | null | undefined = null
+  try {
+    const session = await auth()
+    orgId = session.orgId
+  } catch {
+    // Clerk not configured or auth failed
+  }
+
+  if (!orgId) {
+    // No auth — render children without the sidebar/providers so the
+    // page-level fallback UI can show.
+    return <>{children}</>
+  }
 
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
