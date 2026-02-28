@@ -224,7 +224,7 @@ function LandingPage() {
           </p>
           <div className="mt-10">
             <SignUpButton mode="modal">
-              <button className="rounded-lg bg-brand-black px-8 py-3.5 text-base font-bold text-white hover:bg-brand-black/80 transition-colors">
+              <button className="bg-black px-8 py-3.5 text-base font-bold text-white hover:bg-black/80 transition-colors">
                 Start Free — No CRM Required
               </button>
             </SignUpButton>
@@ -376,7 +376,7 @@ function LandingPage() {
           </p>
           <div className="mt-10">
             <SignUpButton mode="modal">
-              <button className="rounded-lg bg-brand-cyan px-8 py-3.5 text-base font-bold text-brand-black hover:bg-brand-cyan/90 transition-colors">
+              <button className="bg-brand-cyan px-8 py-3.5 text-base font-bold text-black hover:bg-brand-cyan/90 transition-colors">
                 Launch My Pipeline
               </button>
             </SignUpButton>
@@ -388,13 +388,10 @@ function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-brand-black/5 bg-brand-bg">
         <div className="mx-auto max-w-7xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 32 32" fill="none" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="16" cy="16" r="12" stroke="#27e7fe" strokeWidth="2.5" />
-              <path d="M10 16 L16 10 L22 16 L16 22 Z" fill="#27e7fe" />
-            </svg>
-            <span className="text-sm font-bold">Fulcrum Collective</span>
-          </div>
+          <a href="https://fulcrumcollective.io" target="_blank" rel="noopener noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Fulcrum Collective" className="h-5" />
+          </a>
           <p className="text-sm text-brand-black/40">Built for teams that run on results.</p>
         </div>
       </footer>

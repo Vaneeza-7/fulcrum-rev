@@ -8,14 +8,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Idempotent — return existing tenant if already created
-  const existing = await prisma.tenant.findUnique({
-    where: { clerkOrgId: orgId },
-  })
-  if (existing) {
-    return NextResponse.json({ tenantId: existing.id, alreadyExists: true })
-  }
-
   const body = await request.json()
 
   const companyName = body.companyName as string | undefined
@@ -24,6 +16,42 @@ export async function POST(request: Request) {
       { error: 'companyName is required' },
       { status: 400 }
     )
+  }
+
+  const profileData = {
+    companyName: companyName.trim(),
+    websiteUrl: body.websiteUrl ?? null,
+    industry: body.industry ?? null,
+    companySize: body.companySize ?? null,
+    productDescription: body.productDescription ?? null,
+    problemsSolved: body.problemsSolved ?? null,
+    valueProposition: body.valueProposition ?? null,
+  }
+
+  // If tenant already exists, update name and upsert profile
+  const existing = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    include: { profile: true },
+  })
+
+  if (existing) {
+    await prisma.tenant.update({
+      where: { id: existing.id },
+      data: { name: companyName.trim() },
+    })
+
+    if (existing.profile) {
+      await prisma.tenantProfile.update({
+        where: { tenantId: existing.id },
+        data: profileData,
+      })
+    } else {
+      await prisma.tenantProfile.create({
+        data: { tenantId: existing.id, ...profileData },
+      })
+    }
+
+    return NextResponse.json({ tenantId: existing.id })
   }
 
   const slug = orgSlug ?? `org-${orgId.slice(0, 8)}`
@@ -40,16 +68,7 @@ export async function POST(request: Request) {
     })
 
     await tx.tenantProfile.create({
-      data: {
-        tenantId: newTenant.id,
-        companyName: companyName.trim(),
-        websiteUrl: body.websiteUrl ?? null,
-        industry: body.industry ?? null,
-        companySize: body.companySize ?? null,
-        productDescription: body.productDescription ?? null,
-        problemsSolved: body.problemsSolved ?? null,
-        valueProposition: body.valueProposition ?? null,
-      },
+      data: { tenantId: newTenant.id, ...profileData },
     })
 
     return newTenant

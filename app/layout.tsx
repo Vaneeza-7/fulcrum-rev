@@ -1,4 +1,5 @@
 import './globals.css'
+import Image from 'next/image'
 import {
   ClerkProvider,
   SignInButton,
@@ -38,13 +39,15 @@ export default function RootLayout({
                 href="https://fulcrumcollective.io"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2.5"
+                className="flex items-center"
               >
-                <svg viewBox="0 0 32 32" fill="none" className="h-7 w-7" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="16" cy="16" r="12" stroke="#27e7fe" strokeWidth="2.5" />
-                  <path d="M10 16 L16 10 L22 16 L16 22 Z" fill="#27e7fe" />
-                </svg>
-                <span className="text-lg font-bold tracking-tight">Fulcrum</span>
+                <Image
+                  src="/logo.svg"
+                  alt="Fulcrum"
+                  width={140}
+                  height={28}
+                  priority
+                />
               </a>
 
               <div className="flex items-center gap-4">
@@ -55,7 +58,7 @@ export default function RootLayout({
                     </button>
                   </SignInButton>
                   <SignUpButton mode="modal">
-                    <button className="rounded-lg bg-brand-black px-5 py-2 text-sm font-semibold text-white hover:bg-brand-black/80 transition-colors">
+                    <button className="bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-black/80 transition-colors">
                       Get Started
                     </button>
                   </SignUpButton>
