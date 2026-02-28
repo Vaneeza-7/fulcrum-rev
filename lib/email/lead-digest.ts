@@ -153,6 +153,11 @@ export async function sendLeadDigestEmail(tenantId: string): Promise<boolean> {
     const fromAddress = process.env.RESEND_FROM_EMAIL ?? 'leads@fulcrumcollective.io'
     const subject = `Fulcrum \u2014 ${leads.length} Qualified Leads for ${date}`
 
+    if (!resend) {
+      log.error({ tenantId }, 'Resend client not configured (missing RESEND_API_KEY)')
+      return false
+    }
+
     await resend.emails.send({
       from: fromAddress,
       to: emailAddress,

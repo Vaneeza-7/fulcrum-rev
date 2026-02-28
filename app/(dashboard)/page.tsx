@@ -9,6 +9,8 @@ import { ROIAttributionService } from '@/lib/roi/attribution-service'
 import { getROIAttribution } from '@/lib/roi/attribution-tagger'
 import { ROIAttributionTag } from '@/components/roi/ROIAttributionTag'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Fulcrum — Revenue Operating System',
   description: 'AI-powered lead discovery, scoring, and delivery for modern revenue teams.',
