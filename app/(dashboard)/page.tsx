@@ -1,6 +1,7 @@
 // app/(dashboard)/page.tsx
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { SignUpButton } from '@clerk/nextjs'
 import { prisma } from '@/lib/db'
 import { ColdStartGate } from '@/lib/cold-start'
 import { CalibrationWidget } from '@/components/dashboard/CalibrationWidget'
@@ -23,12 +24,20 @@ export default async function DashboardPage() {
   }
   if (!orgId) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-4">Fulcrum</h1>
-          <p className="text-gray-400">
-            Sign in and create an organization to access your RevOps dashboard.
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+        <div className="text-center max-w-lg px-6">
+          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 tracking-tight">
+            Your Revenue,<br />on Autopilot.
+          </h1>
+          <p className="text-lg text-gray-500 mb-8 max-w-md mx-auto">
+            Fulcrum discovers high-intent leads, scores them with AI, and pushes the best ones straight to your CRM.
           </p>
+          <SignUpButton mode="modal">
+            <button className="rounded-lg bg-cyan-600 px-8 py-3 text-base font-semibold text-white hover:bg-cyan-500 transition-colors shadow-lg shadow-cyan-600/20">
+              Get Started Free
+            </button>
+          </SignUpButton>
+          <p className="mt-4 text-sm text-gray-400">No credit card required</p>
         </div>
       </div>
     )

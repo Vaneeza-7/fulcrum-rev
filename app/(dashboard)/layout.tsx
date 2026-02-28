@@ -31,10 +31,10 @@ export default async function DashboardLayout({
     if (userId) {
       // Signed in but no org — show org creation so we get an orgId
       return (
-        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold mb-2">Welcome to Fulcrum</h1>
-            <p className="text-gray-400 mb-8">Create an organization to get started.</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Fulcrum</h1>
+            <p className="text-gray-500 mb-8">Create an organization to get started.</p>
             <CreateOrganization
               afterCreateOrganizationUrl="/step-1"
             />

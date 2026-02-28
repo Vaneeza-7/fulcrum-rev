@@ -33,13 +33,16 @@ export async function POST(request: Request) {
   const template = body.template as string
   const name = body.name as string | undefined
 
+  // Use a unique slug based on the org to avoid unique constraint conflicts
+  const uniqueSlug = orgSlug ?? `org-${orgId.slice(0, 8)}`
+
   if (template === 'custom') {
     // Create bare tenant with no pre-filled config
     const tenant = await prisma.tenant.create({
       data: {
         clerkOrgId: orgId,
         name: name ?? orgSlug ?? 'My Organization',
-        slug: orgSlug ?? `org-${orgId.slice(0, 8)}`,
+        slug: uniqueSlug,
         productType: 'custom',
         crmType: 'zoho',
         crmConfig: {},
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
     ...config,
     clerkOrgId: orgId,
     name: name ?? config.name,
-    slug: orgSlug ?? config.slug,
+    slug: uniqueSlug,
   })
 
   return NextResponse.json({ tenantId })

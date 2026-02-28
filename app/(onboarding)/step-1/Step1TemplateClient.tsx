@@ -47,20 +47,29 @@ export function Step1TemplateClient() {
   const router = useRouter()
   const [selected, setSelected] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleContinue() {
     if (!selected) return
     setLoading(true)
+    setError(null)
 
-    const res = await fetch('/api/onboarding/create-tenant', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template: selected }),
-    })
+    try {
+      const res = await fetch('/api/onboarding/create-tenant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: selected }),
+      })
 
-    if (res.ok) {
-      router.push('/step-2')
-    } else {
+      if (res.ok) {
+        router.push('/step-2')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Something went wrong. Please try again.')
+        setLoading(false)
+      }
+    } catch {
+      setError('Network error. Please try again.')
       setLoading(false)
     }
   }
@@ -97,6 +106,10 @@ export function Step1TemplateClient() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <p className="text-sm text-red-400 mb-4">{error}</p>
+      )}
 
       <button
         onClick={handleContinue}
