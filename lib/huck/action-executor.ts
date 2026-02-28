@@ -54,6 +54,7 @@ export async function executeActions(
         case 'create_task': {
           const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
           const crmConfig = decryptTenantConfig(tenant.crmConfig as Record<string, string>) as CRMAuthConfig;
+          if (!tenant.crmType) break;
           const connector = CRMFactory.create(tenant.crmType, crmConfig);
           await connector.authenticate();
           await connector.createTask(action.dealId, {

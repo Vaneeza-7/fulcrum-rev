@@ -62,7 +62,7 @@ export default async function SettingsPage() {
       tenant={{
         name: tenant.name,
         productType: tenant.productType,
-        crmType: tenant.crmType,
+        crmType: tenant.crmType ?? 'zoho',
         crmConfig: tenant.crmConfig as Record<string, string>,
       }}
       searchQueries={queries}

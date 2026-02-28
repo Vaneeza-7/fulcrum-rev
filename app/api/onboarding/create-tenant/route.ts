@@ -1,19 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import {
-  seedTenant,
-  HUNHU_CONFIG,
-  PULSE_CONFIG,
-  FULCRUM_COLLECTIVE_CONFIG,
-} from '@/lib/onboarding/seed-tenant'
-import type { TenantSeedConfig } from '@/lib/onboarding/seed-tenant'
-
-const TEMPLATES: Record<string, TenantSeedConfig> = {
-  hunhu: HUNHU_CONFIG,
-  pulse: PULSE_CONFIG,
-  fulcrum_collective: FULCRUM_COLLECTIVE_CONFIG,
-}
 
 export async function POST(request: Request) {
   const { orgId, orgSlug } = await auth()
@@ -30,39 +17,43 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const template = body.template as string
-  const name = body.name as string | undefined
 
-  // Use a unique slug based on the org to avoid unique constraint conflicts
-  const uniqueSlug = orgSlug ?? `org-${orgId.slice(0, 8)}`
+  const companyName = body.companyName as string | undefined
+  if (!companyName || companyName.trim().length === 0) {
+    return NextResponse.json(
+      { error: 'companyName is required' },
+      { status: 400 }
+    )
+  }
 
-  if (template === 'custom') {
-    // Create bare tenant with no pre-filled config
-    const tenant = await prisma.tenant.create({
+  const slug = orgSlug ?? `org-${orgId.slice(0, 8)}`
+
+  // Create tenant + profile in a transaction
+  const tenant = await prisma.$transaction(async (tx) => {
+    const newTenant = await tx.tenant.create({
       data: {
         clerkOrgId: orgId,
-        name: name ?? orgSlug ?? 'My Organization',
-        slug: uniqueSlug,
+        name: companyName.trim(),
+        slug,
         productType: 'custom',
-        crmType: 'zoho',
-        crmConfig: {},
       },
     })
-    return NextResponse.json({ tenantId: tenant.id })
-  }
 
-  const config = TEMPLATES[template]
-  if (!config) {
-    return NextResponse.json({ error: 'Invalid template' }, { status: 400 })
-  }
+    await tx.tenantProfile.create({
+      data: {
+        tenantId: newTenant.id,
+        companyName: companyName.trim(),
+        websiteUrl: body.websiteUrl ?? null,
+        industry: body.industry ?? null,
+        companySize: body.companySize ?? null,
+        productDescription: body.productDescription ?? null,
+        problemsSolved: body.problemsSolved ?? null,
+        valueProposition: body.valueProposition ?? null,
+      },
+    })
 
-  // Seed from template with the Clerk org ID injected
-  const tenantId = await seedTenant({
-    ...config,
-    clerkOrgId: orgId,
-    name: name ?? config.name,
-    slug: uniqueSlug,
+    return newTenant
   })
 
-  return NextResponse.json({ tenantId })
+  return NextResponse.json({ tenantId: tenant.id })
 }

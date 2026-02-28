@@ -1,11 +1,11 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
-import { Step1TemplateClient } from './Step1TemplateClient'
+import { Step1CompanyClient } from './Step1CompanyClient'
 
 export const metadata = {
-  title: 'Fulcrum — Get Started',
-  description: 'Step 1: Choose a template to get started',
+  title: 'Fulcrum — Your Company',
+  description: 'Step 1: Tell us about your business',
 }
 
 export default async function Step1Page() {
@@ -18,11 +18,21 @@ export default async function Step1Page() {
   }
   if (!orgId) redirect('/')
 
-  // If tenant already exists, skip to step 2
-  const existing = await prisma.tenant.findUnique({
+  const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
+    include: { profile: true },
   })
-  if (existing) redirect('/step-2')
 
-  return <Step1TemplateClient />
+  // No tenant yet — fresh start
+  if (!tenant) {
+    return <Step1CompanyClient />
+  }
+
+  // Tenant exists and has a profile — skip ahead
+  if (tenant.profile) {
+    redirect('/step-2')
+  }
+
+  // Tenant exists but no profile — pre-fill the name
+  return <Step1CompanyClient existingName={tenant.name} />
 }

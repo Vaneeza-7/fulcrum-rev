@@ -63,6 +63,10 @@ export async function runICMReconciliation(tenantId: string): Promise<Reconcilia
 
   // ---- Stage 1: Scan CRM for new closed-won deals ----
   try {
+    if (!tenant.crmType) {
+      result.errors.push('No CRM configured for this tenant');
+      return result;
+    }
     const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
     await crm.authenticate();
 

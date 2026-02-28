@@ -6,8 +6,8 @@ export interface TenantSeedConfig {
   name: string;
   slug: string;
   productType: string;
-  crmType: string;
-  crmConfig: Record<string, unknown>;
+  crmType?: string;
+  crmConfig?: Record<string, unknown>;
   searchQueries: Array<{
     queryName: string;
     searchQuery: Record<string, unknown>;

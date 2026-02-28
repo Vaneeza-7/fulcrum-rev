@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/cold-start-check",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/email-digest",
+      "schedule": "0 * * * *"
     }
   ]
 }

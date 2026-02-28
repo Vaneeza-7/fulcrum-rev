@@ -48,6 +48,9 @@ function isDealStalled(deal: CRMDeal): { stalled: boolean; reason: string; daysS
  */
 export async function runDealDiagnostics(tenantId: string): Promise<{ checked: number; stalled: number; alerts: SlackDealAlert[] }> {
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  if (!tenant.crmType) {
+    return { checked: 0, stalled: 0, alerts: [] };
+  }
   const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
   await crm.authenticate();
 

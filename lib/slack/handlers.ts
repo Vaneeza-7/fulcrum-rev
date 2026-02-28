@@ -21,6 +21,9 @@ export async function handlePushAllAPlus(tenantId: string): Promise<{ pushed: nu
   });
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  if (!tenant.crmType) {
+    return { pushed: 0, errors: ['No CRM configured for this tenant'] };
+  }
   const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
   await crm.authenticate();
 
@@ -73,6 +76,9 @@ export async function handleApproveLead(tenantId: string, leadId: string): Promi
     });
 
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    if (!tenant.crmType) {
+      return { success: false, error: 'No CRM configured for this tenant' };
+    }
     const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
     await crm.authenticate();
 

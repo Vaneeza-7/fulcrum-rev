@@ -16,6 +16,9 @@ export async function pushLeadToCRM(leadId: string): Promise<{ success: boolean;
     include: { tenant: true },
   });
 
+  if (!lead.tenant.crmType) {
+    return { success: false, error: 'No CRM configured for this tenant' };
+  }
   const crm = CRMFactory.create(lead.tenant.crmType, lead.tenant.crmConfig as CRMAuthConfig);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {

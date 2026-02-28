@@ -1,11 +1,11 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
-import { Step2QueriesClient } from './Step2QueriesClient'
+import { Step2ICPClient } from './Step2ICPClient'
 
 export const metadata = {
-  title: 'Fulcrum — Search Queries',
-  description: 'Step 2: Define your ICP search queries',
+  title: 'Fulcrum — Ideal Customer',
+  description: 'Step 2: Define your ideal customer profile',
 }
 
 export default async function Step2Page() {
@@ -18,20 +18,25 @@ export default async function Step2Page() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
-    include: { searchQueries: true },
+    include: { profile: true },
   })
+
   if (!tenant) redirect('/step-1')
+  if (!tenant.profile) redirect('/step-1')
 
-  const queries = tenant.searchQueries.map((q) => ({
-    queryName: q.queryName,
-    searchQuery: q.searchQuery as {
-      keywords: string
-      industry?: string
-      companySize?: string
-      additionalKeywords?: string
-    },
-    maxResults: q.maxResults,
-  }))
+  const profile = tenant.profile
 
-  return <Step2QueriesClient initialQueries={queries} />
+  return (
+    <Step2ICPClient
+      initialData={{
+        targetIndustries: (profile.targetIndustries as string[]) ?? [],
+        targetCompanySizes: (profile.targetCompanySizes as string[]) ?? [],
+        targetRoles: (profile.targetRoles as string[]) ?? [],
+        targetGeography: (profile.targetGeography as string[]) ?? [],
+        painPoints: profile.painPoints ?? '',
+        buyingSignals: profile.buyingSignals ?? '',
+        searchKeywords: profile.searchKeywords ?? '',
+      }}
+    />
+  )
 }

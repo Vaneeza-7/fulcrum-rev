@@ -16,7 +16,7 @@ model Tenant {
   name        String
   slug        String   @unique
   productType String   @map("product_type") // 'hunhu' | 'pulse' | custom
-  crmType     String   @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce'
+  crmType     String?  @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce' | null
   crmConfig   Json     @default("{}") @map("crm_config")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -68,8 +68,92 @@ model Tenant {
   fulcrumSourceTags    FulcrumSourceTag[]
   roiAttributions      ROIAttribution[]
   negativeSignals      NegativeSignal[]
+  profile              TenantProfile?
+  competitors          TenantCompetitor[]
+  deliveryPreference   TenantDeliveryPreference?
 
   @@map("tenants")
+}
+
+// ============================================================================
+// TENANT PROFILE (company info + ICP description)
+// ============================================================================
+model TenantProfile {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @unique @map("tenant_id") @db.Uuid
+
+  // Company Info (Step 1)
+  companyName        String  @map("company_name")
+  websiteUrl         String? @map("website_url")
+  industry           String?
+  companySize        String? @map("company_size")
+  productDescription String? @map("product_description")
+  problemsSolved     String? @map("problems_solved")
+  valueProposition   String? @map("value_proposition")
+
+  // ICP Details (Step 2)
+  targetIndustries   Json @default("[]") @map("target_industries")
+  targetCompanySizes Json @default("[]") @map("target_company_sizes")
+  targetRoles        Json @default("[]") @map("target_roles")
+  targetGeography    Json @default("[]") @map("target_geography")
+  painPoints         String? @map("pain_points")
+  buyingSignals      String? @map("buying_signals")
+  searchKeywords     String? @map("search_keywords")
+
+  // Positioning (Step 3)
+  competitorDifferentiation String? @map("competitor_differentiation")
+  whyChooseUs               String? @map("why_choose_us")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_profiles")
+}
+
+// ============================================================================
+// TENANT COMPETITORS
+// ============================================================================
+model TenantCompetitor {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+
+  name           String
+  websiteUrl     String? @map("website_url")
+  differentiator String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_competitors")
+}
+
+// ============================================================================
+// TENANT DELIVERY PREFERENCES
+// ============================================================================
+model TenantDeliveryPreference {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+
+  leadVolumeTarget Int    @default(25) @map("lead_volume_target")
+  scheduleType     String @default("weekdays") @map("schedule_type")
+  deliveryTime     String @default("06:00") @map("delivery_time")
+  timezone         String @default("America/New_York")
+
+  crmEnabled   Boolean @default(false) @map("crm_enabled")
+  slackEnabled Boolean @default(false) @map("slack_enabled")
+  emailEnabled Boolean @default(false) @map("email_enabled")
+  emailAddress String? @map("email_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_delivery_preferences")
 }
 
 // ============================================================================

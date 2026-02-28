@@ -8,7 +8,18 @@ const config: Config = {
     './hooks/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        satoshi: ['Satoshi', 'system-ui', 'sans-serif'],
+      },
+      colors: {
+        brand: {
+          cyan: '#27e7fe',
+          bg: '#F9F8F6',
+          black: '#111111',
+        },
+      },
+    },
   },
   plugins: [],
 }

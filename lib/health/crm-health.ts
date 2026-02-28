@@ -11,6 +11,9 @@ import type { HealthCheckResult } from './types';
 async function checkCRMConnection(tenantId: string): Promise<HealthCheckResult> {
   try {
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    if (!tenant.crmType) {
+      return { checkType: 'crm_connectivity', status: 'healthy', details: { message: 'No CRM configured' } };
+    }
     const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
     await crm.authenticate();
 
