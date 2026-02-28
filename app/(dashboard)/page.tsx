@@ -37,7 +37,7 @@ export default async function DashboardPage() {
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
   })
-  if (!tenant) redirect('/onboarding/step-1')
+  if (!tenant) redirect('/step-1')
 
   const coldStartStatus = await ColdStartGate.getStatus(tenant.id)
 

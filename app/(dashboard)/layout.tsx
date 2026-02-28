@@ -33,7 +33,7 @@ export default async function DashboardLayout({
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
   })
-  if (!tenant) redirect('/onboarding/step-1')
+  if (!tenant) redirect('/step-1')
 
   // Count leads that were paused while credits were zero
   const cancelledCount = await prisma.lead.count({

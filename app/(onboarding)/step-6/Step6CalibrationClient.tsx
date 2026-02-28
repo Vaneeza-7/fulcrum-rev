@@ -4,6 +4,7 @@
 import { useState, useCallback } from 'react'
 import { useCalibrationGhost } from '@/hooks/useCalibrationGhost'
 import { AIConfidenceMeter } from '@/components/ui/AIConfidenceMeter'
+import { StepHeader } from '@/components/onboarding/StepHeader'
 import { SwipeableLeadCard } from '@/components/hitl/SwipeableLeadCard'
 import { ReasonChipDrawer } from '@/components/hitl/ReasonChipDrawer'
 
@@ -98,17 +99,12 @@ export function Step6CalibrationClient({
   }, [pendingRejectLeadId, applyHITLAction])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="mx-auto max-w-2xl px-6 py-16">
-        {/* Header */}
-        <div className="mb-2 text-sm text-cyan-400 font-medium uppercase tracking-wide">
-          Step 6 of 6
-        </div>
-        <h1 className="text-3xl font-bold mb-2">AI Calibration</h1>
-        <p className="text-gray-400 mb-8">
-          Fulcrum learns from your approvals and rejections. Review a few leads below to start
-          teaching the model your preferences.
-        </p>
+    <>
+      <StepHeader
+        currentStep={6}
+        title="AI Calibration"
+        description="Fulcrum learns from your approvals and rejections. Review a few leads below to start teaching the model your preferences."
+      />
 
         {/* Confidence Meter */}
         <div className="mb-10">
@@ -213,13 +209,16 @@ export function Step6CalibrationClient({
         {/* Continue button */}
         <div className="mt-10 flex justify-end">
           <a
-            href="/dashboard"
+            href="/"
             className="rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
           >
             Continue to Dashboard →
           </a>
         </div>
-      </div>
+
+        <a href="/step-5" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-400">
+          Back
+        </a>
 
       {/* Rejection reason drawer */}
       <ReasonChipDrawer
@@ -227,6 +226,6 @@ export function Step6CalibrationClient({
         onConfirm={handleRejectWithReasons}
         onCancel={() => setPendingRejectLeadId(null)}
       />
-    </div>
+    </>
   )
 }

@@ -12,13 +12,19 @@ export const metadata = {
 }
 
 export default async function UsagePage() {
-  const { orgId } = await auth()
-  if (!orgId) redirect('/sign-in')
+  let orgId: string | null | undefined = null
+  try {
+    const session = await auth()
+    orgId = session.orgId
+  } catch {
+    // Clerk not configured
+  }
+  if (!orgId) redirect('/')
 
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
   })
-  if (!tenant) redirect('/onboarding/step-1')
+  if (!tenant) redirect('/step-1')
 
   // Fetch ROI summary and top leads
   const [roiSummary, topROILeads, totalLeads, pushedToCrm, pipelineRuns] = await Promise.all([

@@ -2,6 +2,7 @@ import { prisma } from '../db';
 import { initializeColdStart } from '@/lib/cold-start';
 
 export interface TenantSeedConfig {
+  clerkOrgId?: string;
   name: string;
   slug: string;
   productType: string;
@@ -33,6 +34,7 @@ export interface TenantSeedConfig {
 export async function seedTenant(config: TenantSeedConfig): Promise<string> {
   const tenant = await prisma.tenant.create({
     data: {
+      clerkOrgId: config.clerkOrgId,
       name: config.name,
       slug: config.slug,
       productType: config.productType,
