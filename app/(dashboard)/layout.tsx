@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import { CreateOrganization } from '@clerk/nextjs'
 import { prisma } from '@/lib/db'
 import { CleanSlateProvider } from '@/components/providers/CleanSlateProvider'
 import { SidebarIntegritySlot } from '@/components/sidebar/SidebarIntegritySlot'
@@ -17,16 +18,31 @@ export default async function DashboardLayout({
   children: React.ReactNode
 }) {
   let orgId: string | null | undefined = null
+  let userId: string | null | undefined = null
   try {
     const session = await auth()
     orgId = session.orgId
+    userId = session.userId
   } catch {
     // Clerk not configured or auth failed
   }
 
   if (!orgId) {
-    // No auth — render children without the sidebar/providers so the
-    // page-level fallback UI can show.
+    if (userId) {
+      // Signed in but no org — show org creation so we get an orgId
+      return (
+        <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-2">Welcome to Fulcrum</h1>
+            <p className="text-gray-400 mb-8">Create an organization to get started.</p>
+            <CreateOrganization
+              afterCreateOrganizationUrl="/step-1"
+            />
+          </div>
+        </div>
+      )
+    }
+    // Not signed in — render children so the page-level fallback UI can show.
     return <>{children}</>
   }
 

@@ -27,7 +27,7 @@ export default async function DashboardPage() {
         <div className="text-center max-w-md">
           <h1 className="text-2xl font-bold mb-4">Fulcrum</h1>
           <p className="text-gray-400">
-            Sign in to access your RevOps dashboard.
+            Sign in and create an organization to access your RevOps dashboard.
           </p>
         </div>
       </div>
