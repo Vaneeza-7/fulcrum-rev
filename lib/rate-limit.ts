@@ -1,6 +1,8 @@
 /**
  * In-memory sliding window rate limiter.
- * No external dependencies (no Redis needed for single-instance deployment).
+ * Note: On Vercel serverless, each function invocation may get a fresh instance,
+ * so this only protects against burst abuse within warm invocations.
+ * For production-grade rate limiting, upgrade to @upstash/ratelimit with Vercel KV.
  */
 
 interface RateLimitConfig {
@@ -10,8 +12,8 @@ interface RateLimitConfig {
 
 const store = new Map<string, number[]>();
 
-// Cleanup old entries every 60 seconds
-setInterval(() => {
+// Cleanup old entries every 60 seconds (unref so it doesn't keep serverless functions alive)
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, timestamps] of Array.from(store.entries())) {
     const filtered = timestamps.filter((t: number) => now - t < 300_000); // Keep last 5 min
@@ -22,6 +24,9 @@ setInterval(() => {
     }
   }
 }, 60_000);
+if (typeof cleanupTimer === 'object' && 'unref' in cleanupTimer) {
+  cleanupTimer.unref();
+}
 
 /**
  * Check if a request should be rate limited.

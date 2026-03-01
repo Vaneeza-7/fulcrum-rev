@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Webhook } from 'svix';
 import { prisma } from '@/lib/db';
 import { initializeColdStart } from '@/lib/cold-start';
 import { clerkWebhookSchema } from '@/lib/validation/schemas';
@@ -9,24 +10,42 @@ const log = routeLogger('/api/webhooks/clerk');
 /**
  * Clerk webhook handler for organization lifecycle events.
  * Creates/updates/deletes Tenant records based on Clerk org events.
+ * Uses Svix signature verification (Clerk's webhook delivery mechanism).
  */
 export async function POST(request: NextRequest) {
-  // Verify webhook secret — required in production
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      log.error('CLERK_WEBHOOK_SECRET not set — rejecting webhook');
-      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
-    }
-  } else {
-    const headerSecret = request.headers.get('x-clerk-webhook-secret');
-    if (headerSecret !== webhookSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    log.error('CLERK_WEBHOOK_SECRET not set — rejecting webhook');
+    return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+  }
+
+  // Read raw body for signature verification
+  const rawBody = await request.text();
+
+  // Svix headers sent by Clerk
+  const svixId = request.headers.get('svix-id');
+  const svixTimestamp = request.headers.get('svix-timestamp');
+  const svixSignature = request.headers.get('svix-signature');
+
+  if (!svixId || !svixTimestamp || !svixSignature) {
+    return NextResponse.json({ error: 'Missing Svix headers' }, { status: 400 });
+  }
+
+  // Verify the webhook signature
+  let body: unknown;
+  try {
+    const wh = new Webhook(webhookSecret);
+    body = wh.verify(rawBody, {
+      'svix-id': svixId,
+      'svix-timestamp': svixTimestamp,
+      'svix-signature': svixSignature,
+    });
+  } catch (err) {
+    log.error({ error: err }, 'Webhook signature verification failed');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
   try {
-    const body = await request.json();
     const parsed = clerkWebhookSchema.safeParse(body);
 
     if (!parsed.success) {

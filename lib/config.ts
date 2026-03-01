@@ -15,6 +15,9 @@ const envSchema = z.object({
   ZOHO_CLIENT_SECRET: z.string().optional(),
   ZOHO_REFRESH_TOKEN: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  // Resend (email delivery)
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
   // Predictive Revenue Engine — external API connectors
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
