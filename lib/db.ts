@@ -28,9 +28,7 @@ if (process.env.NODE_ENV !== 'production') {
  * Must be called before any tenant-scoped query.
  */
 export async function setTenantContext(tenantId: string): Promise<void> {
-  await prisma.$executeRawUnsafe(
-    `SET LOCAL app.current_tenant = '${tenantId}'`
-  );
+  await prisma.$executeRaw`SET LOCAL app.current_tenant = ${tenantId}`;
 }
 
 /**
@@ -42,9 +40,7 @@ export async function withTenant<T>(
   callback: (tx: PrismaClient) => Promise<T>
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(
-      `SET LOCAL app.current_tenant = '${tenantId}'`
-    );
+    await tx.$executeRaw`SET LOCAL app.current_tenant = ${tenantId}`;
     return callback(tx as unknown as PrismaClient);
   });
 }

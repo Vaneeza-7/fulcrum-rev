@@ -10,6 +10,7 @@ import {
   handleMonitoringAck,
   handleMonitoringSuppress,
 } from '@/lib/slack/handlers';
+import { verifySlackRequest } from '@/lib/slack/verify-signature';
 import { NegativeReason } from '@prisma/client';
 import { routeLogger } from '@/lib/logger';
 
@@ -21,7 +22,16 @@ const log = routeLogger('/api/slack/interactions');
  */
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    // Verify Slack request signature
+    const rawBody = await request.text();
+    const signatureResult = verifySlackRequest(request.headers, rawBody);
+    if (!signatureResult.valid) {
+      log.warn({ error: signatureResult.error }, 'Slack signature verification failed');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Re-parse the body as form data since we already consumed it
+    const formData = new URLSearchParams(rawBody);
     const payloadStr = formData.get('payload') as string;
     if (!payloadStr) {
       return NextResponse.json({ error: 'Missing payload' }, { status: 400 });

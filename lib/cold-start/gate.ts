@@ -34,8 +34,9 @@ export class ColdStartGate {
     }
 
     const now = new Date();
+    const expiresAt = state.coldStartExpiresAt ?? new Date(now.getTime() + 30 * 86400000);
     const daysRemaining = Math.max(0, Math.ceil(
-      (state.coldStartExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     ));
 
     return {
@@ -43,7 +44,7 @@ export class ColdStartGate {
       requiresManualApproval: state.requiresManualApproval,
       confidenceFloorBoost: state.confidenceFloorBoost,
       calibrationSignificance: state.calibrationSignificance,
-      expiresAt: state.coldStartExpiresAt,
+      expiresAt,
       daysRemaining,
     };
   }

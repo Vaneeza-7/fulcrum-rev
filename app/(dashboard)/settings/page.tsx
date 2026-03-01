@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { SettingsClient } from './SettingsClient'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Fulcrum — Settings',
   description: 'Manage your tenant configuration',

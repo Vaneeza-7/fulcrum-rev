@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     await tx.tenantProfile.update({
       where: { tenantId: tenant.id },
       data: {
-        competitorDifferentiation: body.competitorDifferentiation ?? null,
+        competitorDifferentiation: body.differentiation ?? body.competitorDifferentiation ?? null,
         whyChooseUs: body.whyChooseUs ?? null,
       },
     })

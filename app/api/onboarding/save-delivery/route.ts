@@ -15,77 +15,74 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
   }
 
-  const body = await request.json()
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
 
-  const channels = body.channels as {
-    crm?: { type: string; config: Record<string, string> }
-    slack?: { teamId: string; botToken: string; channelId: string }
-    email?: { address: string }
-  } | undefined
+  const crmEnabled = !!body.crmEnabled
+  const slackEnabled = !!body.slackEnabled
+  const emailEnabled = !!body.emailEnabled
 
-  if (!channels || (!channels.crm && !channels.slack && !channels.email)) {
+  if (!crmEnabled && !slackEnabled && !emailEnabled) {
     return NextResponse.json(
       { error: 'At least one delivery channel is required' },
       { status: 400 }
     )
   }
 
-  const crmEnabled = !!channels.crm
-  const slackEnabled = !!channels.slack
-  const emailEnabled = !!channels.email
-
   await prisma.$transaction(async (tx) => {
-    // Upsert delivery preferences
     await tx.tenantDeliveryPreference.upsert({
       where: { tenantId: tenant.id },
       create: {
         tenantId: tenant.id,
-        leadVolumeTarget: body.leadVolumeTarget ?? 25,
-        scheduleType: body.scheduleType ?? 'weekdays',
-        deliveryTime: body.deliveryTime ?? '06:00',
-        timezone: body.timezone ?? 'America/New_York',
+        leadVolumeTarget: typeof body.leadVolumeTarget === 'number' ? body.leadVolumeTarget : 25,
+        scheduleType: typeof body.scheduleType === 'string' ? body.scheduleType : 'weekdays',
+        deliveryTime: typeof body.deliveryTime === 'string' ? body.deliveryTime : '06:00',
+        timezone: typeof body.timezone === 'string' ? body.timezone : 'America/New_York',
         crmEnabled,
         slackEnabled,
         emailEnabled,
-        emailAddress: channels.email?.address ?? null,
+        emailAddress: emailEnabled && typeof body.emailAddress === 'string' ? body.emailAddress : null,
       },
       update: {
-        leadVolumeTarget: body.leadVolumeTarget ?? 25,
-        scheduleType: body.scheduleType ?? 'weekdays',
-        deliveryTime: body.deliveryTime ?? '06:00',
-        timezone: body.timezone ?? 'America/New_York',
+        leadVolumeTarget: typeof body.leadVolumeTarget === 'number' ? body.leadVolumeTarget : 25,
+        scheduleType: typeof body.scheduleType === 'string' ? body.scheduleType : 'weekdays',
+        deliveryTime: typeof body.deliveryTime === 'string' ? body.deliveryTime : '06:00',
+        timezone: typeof body.timezone === 'string' ? body.timezone : 'America/New_York',
         crmEnabled,
         slackEnabled,
         emailEnabled,
-        emailAddress: channels.email?.address ?? null,
+        emailAddress: emailEnabled && typeof body.emailAddress === 'string' ? body.emailAddress : null,
       },
     })
 
-    // If CRM channel provided, update tenant CRM config
-    if (channels.crm) {
+    if (crmEnabled && typeof body.crmType === 'string') {
       await tx.tenant.update({
         where: { id: tenant.id },
         data: {
-          crmType: channels.crm.type,
-          crmConfig: channels.crm.config as any,
+          crmType: body.crmType,
+          crmConfig: (body.crmConfig ?? {}) as any,
         },
       })
     }
 
-    // If Slack channel provided, upsert TenantSlackConfig
-    if (channels.slack) {
+    const slackConfig = body.slackConfig as { teamId?: string; botToken?: string; channelId?: string } | undefined
+    if (slackEnabled && slackConfig?.botToken && slackConfig?.channelId) {
       await tx.tenantSlackConfig.upsert({
         where: { tenantId: tenant.id },
         create: {
           tenantId: tenant.id,
-          teamId: channels.slack.teamId,
-          botToken: channels.slack.botToken,
-          channelId: channels.slack.channelId,
+          teamId: slackConfig.teamId ?? '',
+          botToken: slackConfig.botToken,
+          channelId: slackConfig.channelId,
         },
         update: {
-          teamId: channels.slack.teamId,
-          botToken: channels.slack.botToken,
-          channelId: channels.slack.channelId,
+          teamId: slackConfig.teamId ?? '',
+          botToken: slackConfig.botToken,
+          channelId: slackConfig.channelId,
         },
       })
     }

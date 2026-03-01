@@ -11,9 +11,14 @@ const log = routeLogger('/api/webhooks/clerk');
  * Creates/updates/deletes Tenant records based on Clerk org events.
  */
 export async function POST(request: NextRequest) {
-  // Verify webhook secret
+  // Verify webhook secret — required in production
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
-  if (webhookSecret) {
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      log.error('CLERK_WEBHOOK_SECRET not set — rejecting webhook');
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+    }
+  } else {
     const headerSecret = request.headers.get('x-clerk-webhook-secret');
     if (headerSecret !== webhookSecret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,7 +44,7 @@ export async function POST(request: NextRequest) {
             name: data.name ?? data.id,
             slug: data.slug ?? data.id,
             productType: 'custom',
-            crmType: 'hubspot',
+            crmType: null,
             crmConfig: {},
           },
         });

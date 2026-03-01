@@ -75,6 +75,10 @@ export async function handleApproveLead(tenantId: string, leadId: string): Promi
       where: { id: leadId },
     });
 
+    if (lead.tenantId !== tenantId) {
+      return { success: false, error: 'Lead does not belong to this tenant' };
+    }
+
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
     if (!tenant.crmType) {
       return { success: false, error: 'No CRM configured for this tenant' };
@@ -123,6 +127,14 @@ export async function handleRejectLead(
   rejectReason?: NegativeReason,
   rejectedBy?: string,
 ): Promise<void> {
+  const lead = await prisma.lead.findUniqueOrThrow({
+    where: { id: leadId },
+  });
+
+  if (lead.tenantId !== tenantId) {
+    throw new Error('Lead does not belong to this tenant');
+  }
+
   await prisma.lead.update({
     where: { id: leadId },
     data: {

@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { LeadsClient } from './LeadsClient'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = {
   title: 'Fulcrum — Leads',
   description: 'View and manage your discovered leads',

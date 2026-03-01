@@ -9,8 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
 export function verifyCronAuth(request: NextRequest): NextResponse | null {
   const cronSecret = process.env.CRON_SECRET;
 
-  // Skip auth in development if CRON_SECRET is not set
-  if (!cronSecret) return null;
+  // In production, CRON_SECRET must be set
+  if (!cronSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Server misconfiguration: CRON_SECRET not set' }, { status: 500 });
+    }
+    return null;
+  }
 
   // Check standard Bearer token first
   const authHeader = request.headers.get('authorization');
