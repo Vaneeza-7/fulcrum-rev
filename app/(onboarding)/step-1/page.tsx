@@ -18,10 +18,17 @@ export default async function Step1Page() {
   }
   if (!orgId) redirect('/')
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { clerkOrgId: orgId },
-    include: { profile: true },
-  })
+  let tenant: Awaited<ReturnType<typeof prisma.tenant.findUnique>> & { profile?: unknown } | null = null
+  try {
+    tenant = await prisma.tenant.findUnique({
+      where: { clerkOrgId: orgId },
+      include: { profile: true },
+    })
+  } catch (err) {
+    console.error('step-1 DB error:', err)
+    // DB error — let user proceed with fresh form
+    return <Step1CompanyClient />
+  }
 
   // No tenant yet — fresh start
   if (!tenant) {
