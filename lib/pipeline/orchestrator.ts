@@ -224,8 +224,8 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
 
   // 9. SLACK NOTIFICATION
   const crmCfg = tenant.crmConfig as Record<string, unknown>;
-  const zohoOrgId = crmCfg?.org_id as string | undefined;
-  const zohoCustomViewUrl = crmCfg?.custom_view_url as string | undefined;
+  const crmOrgId = crmCfg?.org_id as string | undefined;
+  const crmCustomViewUrl = crmCfg?.custom_view_url as string | undefined;
   const topLeads: SlackLeadCard[] = createdLeadRecords
     .sort((a, b) => b.fulcrumScore - a.fulcrumScore)
     .slice(0, 10)
@@ -250,9 +250,9 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     grade_distribution: gradeDistribution,
     top_leads: topLeads,
     errors: [...errors, ...pushErrors],
-    zoho_org_id: zohoOrgId,
-    zoho_leads_url: zohoCustomViewUrl
-      ?? (zohoOrgId ? `https://crm.zoho.com/crm/org${zohoOrgId}/tab/Leads` : undefined),
+    crm_org_id: crmOrgId,
+    crm_type: tenant.crmType ?? undefined,
+    crm_leads_url: crmCustomViewUrl ?? undefined,
   };
 
   try {

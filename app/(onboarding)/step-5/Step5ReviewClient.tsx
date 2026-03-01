@@ -134,7 +134,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Your Company</h3>
-              <a href="/step-1" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+              <a href="/step-1" className="text-xs text-brand-cyan hover:text-brand-cyan/80 transition-colors">
                 Edit
               </a>
             </div>
@@ -156,7 +156,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Ideal Customer</h3>
-              <a href="/step-2" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+              <a href="/step-2" className="text-xs text-brand-cyan hover:text-brand-cyan/80 transition-colors">
                 Edit
               </a>
             </div>
@@ -179,7 +179,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
                   {icp.targetRoles.map((role) => (
                     <span
                       key={role}
-                      className="inline-block rounded-full bg-cyan-600/20 border border-cyan-600/40 px-2.5 py-0.5 text-xs text-cyan-400"
+                      className="inline-block rounded-full bg-brand-cyan/20 border border-brand-cyan/40 px-2.5 py-0.5 text-xs text-brand-cyan"
                     >
                       {role}
                     </span>
@@ -209,7 +209,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Competitors</h3>
-              <a href="/step-3" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+              <a href="/step-3" className="text-xs text-brand-cyan hover:text-brand-cyan/80 transition-colors">
                 Edit
               </a>
             </div>
@@ -233,14 +233,14 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
           <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Delivery</h3>
-              <a href="/step-4" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+              <a href="/step-4" className="text-xs text-brand-cyan hover:text-brand-cyan/80 transition-colors">
                 Edit
               </a>
             </div>
             {delivery ? (
               <div className="space-y-1.5 text-sm">
                 <div className="text-gray-300">
-                  <span className="text-cyan-400 font-medium">{delivery.leadVolumeTarget}</span> leads/day
+                  <span className="text-brand-cyan font-medium">{delivery.leadVolumeTarget}</span> leads/day
                 </div>
                 <div className="text-gray-400">
                   {delivery.scheduleType === 'weekdays' ? 'Weekdays (Mon-Fri)' : 'Every Day'} at{' '}
@@ -267,7 +267,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
 
         <button
           onClick={startGenerating}
-          className="mt-6 w-full rounded-lg bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
+          className="mt-6 w-full rounded-lg bg-brand-cyan px-6 py-3 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors"
         >
           Launch My Pipeline
         </button>
@@ -292,13 +292,13 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
         <div className="flex flex-col items-center justify-center py-20">
           {/* Pulsing animation */}
           <div className="relative mb-8">
-            <div className="h-16 w-16 rounded-full bg-cyan-600/20 animate-ping absolute inset-0" />
-            <div className="h-16 w-16 rounded-full bg-cyan-600/40 flex items-center justify-center relative">
+            <div className="h-16 w-16 rounded-full bg-brand-cyan/20 animate-ping absolute inset-0" />
+            <div className="h-16 w-16 rounded-full bg-brand-cyan/40 flex items-center justify-center relative">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="currentColor"
-                className="h-8 w-8 text-cyan-400 animate-spin"
+                className="h-8 w-8 text-brand-cyan animate-spin"
               >
                 <path
                   fillRule="evenodd"
@@ -400,7 +400,7 @@ export function Step5ReviewClient({ company, icp, competitors, delivery, initial
         </button>
         <button
           onClick={() => router.push('/step-6')}
-          className="flex-1 rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
+          className="flex-1 rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors"
         >
           Continue to Calibration &rarr;
         </button>

@@ -28,7 +28,7 @@ export function CleanSlateModal({ state }: CleanSlateModalProps) {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Icon */}
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-cyan-50">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-cyan/5">
               <span className="text-3xl">🧹</span>
             </div>
 
@@ -48,7 +48,7 @@ export function CleanSlateModal({ state }: CleanSlateModalProps) {
                 type="button"
                 disabled={isPurging}
                 onClick={confirmPurge}
-                className="flex-1 rounded-xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-600 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-brand-cyan px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-cyan/80 disabled:opacity-60"
               >
                 {isPurging ? 'Clearing…' : 'Start Fresh — Clear Paused Leads'}
               </button>

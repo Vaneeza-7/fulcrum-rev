@@ -102,7 +102,7 @@ export function SettingsClient({
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${
                 activeTab === tab.key
-                  ? 'text-cyan-400 border-b-2 border-cyan-400'
+                  ? 'text-brand-cyan border-b-2 border-brand-cyan'
                   : 'text-gray-400 hover:text-white'
               }`}
             >

@@ -206,7 +206,7 @@ export function ScoringEditor({ initialScoring, onSave, saveLabel = 'Save & Cont
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {saving ? 'Saving...' : saveLabel}
       </button>

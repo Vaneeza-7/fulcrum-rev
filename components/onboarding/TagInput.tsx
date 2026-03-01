@@ -48,13 +48,13 @@ export function TagInput({ value, onChange, placeholder = 'Type and press Enter.
           {value.map((tag, i) => (
             <span
               key={`${tag}-${i}`}
-              className="inline-flex items-center gap-1 rounded-full bg-cyan-600/20 border border-cyan-600/40 px-3 py-1 text-xs text-cyan-400"
+              className="inline-flex items-center gap-1 rounded-full bg-brand-cyan/20 border border-brand-cyan/40 px-3 py-1 text-xs text-brand-cyan"
             >
               {tag}
               <button
                 type="button"
                 onClick={() => removeTag(i)}
-                className="ml-0.5 text-cyan-400/60 hover:text-cyan-300 transition-colors"
+                className="ml-0.5 text-brand-cyan/60 hover:text-brand-cyan/80 transition-colors"
                 aria-label={`Remove ${tag}`}
               >
                 <svg
@@ -77,7 +77,7 @@ export function TagInput({ value, onChange, placeholder = 'Type and press Enter.
         onKeyDown={handleKeyDown}
         placeholder={value.length >= maxTags ? `Maximum of ${maxTags} tags reached` : placeholder}
         disabled={value.length >= maxTags}
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-600 focus:border-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-brand-cyan focus:border-brand-cyan disabled:opacity-50 disabled:cursor-not-allowed"
       />
     </div>
   )

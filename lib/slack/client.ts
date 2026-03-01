@@ -47,7 +47,8 @@ export async function sendLeadReviewThread(
   tenantId: string,
   leads: SlackLeadCard[],
   parentTs?: string,
-  zohoOrgId?: string
+  crmOrgId?: string,
+  crmType?: string
 ): Promise<void> {
   const slack = await getSlackClient(tenantId);
   if (!slack) return;
@@ -57,7 +58,7 @@ export async function sendLeadReviewThread(
       channel: slack.channelId,
       thread_ts: parentTs,
       text: `Review: ${lead.full_name} (${lead.fulcrum_grade})`,
-      blocks: buildLeadReviewBlocks(lead, zohoOrgId) as never[],
+      blocks: buildLeadReviewBlocks(lead, crmOrgId, crmType) as never[],
     });
   }
 }

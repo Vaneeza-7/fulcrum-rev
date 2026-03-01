@@ -126,7 +126,7 @@ export default async function UsagePage() {
                         className="ml-1 align-middle"
                       />
                     </span>
-                    <span className="text-xs text-cyan-400 font-semibold">
+                    <span className="text-xs text-brand-cyan font-semibold">
                       {lead.roiMultiplier.toFixed(1)}x
                     </span>
                     <span className="text-xs text-gray-600">

@@ -172,7 +172,7 @@ export function Step4DeliveryClient({
           {/* Lead Volume */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Leads per day: <span className="text-cyan-400 font-semibold">{leadVolume}</span>
+              Leads per day: <span className="text-brand-cyan font-semibold">{leadVolume}</span>
             </label>
             <input
               type="range"
@@ -181,7 +181,7 @@ export function Step4DeliveryClient({
               step={1}
               value={leadVolume}
               onChange={(e) => setLeadVolume(parseInt(e.target.value, 10))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-600"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-brand-cyan"
             />
             <div className="flex justify-between text-xs text-gray-600 mt-1">
               <span>20</span>
@@ -203,7 +203,7 @@ export function Step4DeliveryClient({
                   onClick={() => setScheduleType(opt.value)}
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     scheduleType === opt.value
-                      ? 'bg-cyan-600 text-white'
+                      ? 'bg-brand-cyan text-white'
                       : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
                   }`}
                 >
@@ -220,7 +220,7 @@ export function Step4DeliveryClient({
               <select
                 value={deliveryHour}
                 onChange={(e) => setDeliveryHour(parseInt(e.target.value, 10))}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
               >
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
                   <option key={h} value={h}>
@@ -231,7 +231,7 @@ export function Step4DeliveryClient({
               <select
                 value={deliveryPeriod}
                 onChange={(e) => setDeliveryPeriod(e.target.value as 'AM' | 'PM')}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
               >
                 <option value="AM">AM</option>
                 <option value="PM">PM</option>
@@ -257,7 +257,7 @@ export function Step4DeliveryClient({
                 type="checkbox"
                 checked={crmEnabled}
                 onChange={(e) => setCrmEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-cyan-600 focus:ring-cyan-600 focus:ring-offset-0"
+                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-cyan focus:ring-brand-cyan focus:ring-offset-0"
               />
               <span className="text-sm font-medium text-white">CRM Integration</span>
             </label>
@@ -276,7 +276,7 @@ export function Step4DeliveryClient({
                       }}
                       className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                         crmType === type
-                          ? 'bg-cyan-600 text-white'
+                          ? 'bg-brand-cyan text-white'
                           : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
                       }`}
                     >
@@ -298,7 +298,7 @@ export function Step4DeliveryClient({
                           value={crmConfig[field.key] ?? ''}
                           onChange={(e) => updateCrmField(field.key, e.target.value)}
                           placeholder={field.label}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                         />
                       </div>
                     ))}
@@ -315,7 +315,7 @@ export function Step4DeliveryClient({
                 type="checkbox"
                 checked={slackEnabled}
                 onChange={(e) => setSlackEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-cyan-600 focus:ring-cyan-600 focus:ring-offset-0"
+                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-cyan focus:ring-brand-cyan focus:ring-offset-0"
               />
               <span className="text-sm font-medium text-white">Slack</span>
             </label>
@@ -329,7 +329,7 @@ export function Step4DeliveryClient({
                     value={slackBotToken}
                     onChange={(e) => setSlackBotToken(e.target.value)}
                     placeholder="xoxb-..."
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -339,7 +339,7 @@ export function Step4DeliveryClient({
                     value={slackChannelId}
                     onChange={(e) => setSlackChannelId(e.target.value)}
                     placeholder="C01234ABCDE"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -349,7 +349,7 @@ export function Step4DeliveryClient({
                     value={slackTeamId}
                     onChange={(e) => setSlackTeamId(e.target.value)}
                     placeholder="T01234ABCDE"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                   />
                 </div>
               </div>
@@ -363,7 +363,7 @@ export function Step4DeliveryClient({
                 type="checkbox"
                 checked={emailEnabled}
                 onChange={(e) => setEmailEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-cyan-600 focus:ring-cyan-600 focus:ring-offset-0"
+                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-brand-cyan focus:ring-brand-cyan focus:ring-offset-0"
               />
               <span className="text-sm font-medium text-white">Email Spreadsheet</span>
             </label>
@@ -377,7 +377,7 @@ export function Step4DeliveryClient({
                     value={emailAddress}
                     onChange={(e) => setEmailAddress(e.target.value)}
                     placeholder="you@company.com"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                   />
                 </div>
                 <p className="text-xs text-gray-500">
@@ -393,7 +393,7 @@ export function Step4DeliveryClient({
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Saving...' : 'Continue'}
         </button>

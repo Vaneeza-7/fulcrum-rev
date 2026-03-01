@@ -72,26 +72,3 @@ Recent News: ${perplexityData.recentNews}
     };
   }
 }
-
-/**
- * Enrich multiple profiles with concurrency control.
- */
-export async function enrichProfiles(
-  profiles: LinkedInProfile[],
-  concurrency: number = 3
-): Promise<Map<string, EnrichmentResult>> {
-  const results = new Map<string, EnrichmentResult>();
-  const queue = [...profiles];
-
-  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (queue.length > 0) {
-      const profile = queue.shift();
-      if (!profile) break;
-      const result = await enrichProfile(profile);
-      results.set(profile.linkedin_url, result);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}

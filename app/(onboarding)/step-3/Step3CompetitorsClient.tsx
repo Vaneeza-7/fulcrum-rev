@@ -113,21 +113,21 @@ export function Step3CompetitorsClient({
                   value={comp.name}
                   onChange={(e) => updateCompetitor(index, 'name', e.target.value)}
                   placeholder="Name"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                 />
                 <input
                   type="text"
                   value={comp.websiteUrl}
                   onChange={(e) => updateCompetitor(index, 'websiteUrl', e.target.value)}
                   placeholder="Website"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                 />
                 <input
                   type="text"
                   value={comp.differentiator}
                   onChange={(e) => updateCompetitor(index, 'differentiator', e.target.value)}
                   placeholder="How you differ"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
                 />
               </div>
               <button
@@ -147,7 +147,7 @@ export function Step3CompetitorsClient({
             type="button"
             onClick={addCompetitor}
             disabled={competitors.length >= 10}
-            className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-sm text-brand-cyan hover:text-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             + Add competitor
           </button>
@@ -164,7 +164,7 @@ export function Step3CompetitorsClient({
               value={differentiation}
               onChange={(e) => setDifferentiation(e.target.value)}
               placeholder="What generally makes a prospect choose you over a competitor?"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
         </div>
@@ -182,7 +182,7 @@ export function Step3CompetitorsClient({
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Saving...' : 'Continue'}
           </button>

@@ -19,8 +19,9 @@ export interface SlackPipelineSummary {
   grade_distribution: Record<string, number>;
   top_leads: SlackLeadCard[];
   errors: string[];
-  zoho_org_id?: string;
-  zoho_leads_url?: string;
+  crm_org_id?: string;
+  crm_leads_url?: string;
+  crm_type?: string;
 }
 
 export interface SlackDealAlert {

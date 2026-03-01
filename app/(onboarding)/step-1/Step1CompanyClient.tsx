@@ -91,7 +91,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Acme Inc."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
             />
           </div>
 
@@ -105,7 +105,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
             />
           </div>
 
@@ -117,7 +117,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               id="industry"
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent"
             >
               <option value="">Select an industry...</option>
               {INDUSTRIES.map((ind) => (
@@ -138,7 +138,7 @@ export function Step1CompanyClient({ existingName }: Props) {
                   onClick={() => setCompanySize(companySize === size ? '' : size)}
                   className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                     companySize === size
-                      ? 'bg-cyan-600 text-white'
+                      ? 'bg-brand-cyan text-white'
                       : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
                   }`}
                 >
@@ -160,7 +160,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               value={productDescription}
               onChange={(e) => setProductDescription(e.target.value)}
               placeholder="Describe your product or service in 1-2 sentences"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
 
@@ -173,7 +173,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               value={problemsSolved}
               onChange={(e) => setProblemsSolved(e.target.value)}
               placeholder="What challenges do your customers face before using your solution?"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
 
@@ -186,7 +186,7 @@ export function Step1CompanyClient({ existingName }: Props) {
               value={valueProposition}
               onChange={(e) => setValueProposition(e.target.value)}
               placeholder="Why do customers choose you over alternatives?"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
         </div>
@@ -196,7 +196,7 @@ export function Step1CompanyClient({ existingName }: Props) {
         <button
           type="submit"
           disabled={!companyName.trim() || loading}
-          className="w-full rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Setting up your workspace...' : 'Continue'}
         </button>

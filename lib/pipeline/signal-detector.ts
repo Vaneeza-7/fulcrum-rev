@@ -42,11 +42,19 @@ Analyze this enrichment data and detect any intent signals. Check for:
       { maxTokens: 1500 }
     );
 
-    // Apply time decay to each signal
-    return signals.map((signal) => ({
-      ...signal,
-      signal_score: signal.signal_score * getTimeDecayMultiplier(signal.days_ago),
-    }));
+    // Validate and apply time decay to each signal
+    return signals
+      .filter((signal) =>
+        typeof signal.signal_score === 'number' &&
+        isFinite(signal.signal_score) &&
+        typeof signal.days_ago === 'number' &&
+        isFinite(signal.days_ago)
+      )
+      .map((signal) => ({
+        ...signal,
+        signal_score: Math.max(0, Math.min(signal.signal_score, 15)) * getTimeDecayMultiplier(Math.max(0, signal.days_ago)),
+        days_ago: Math.max(0, signal.days_ago),
+      }));
   } catch (error) {
     console.error('Signal detection failed:', error);
     return [];

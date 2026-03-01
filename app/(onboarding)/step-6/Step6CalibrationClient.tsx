@@ -151,7 +151,7 @@ export function Step6CalibrationClient({
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="text-lg font-bold text-cyan-400">
+                      <span className="text-lg font-bold text-brand-cyan">
                         {lead.fulcrumScore}
                       </span>
                       <span className="ml-1 text-sm text-gray-500">
@@ -210,7 +210,7 @@ export function Step6CalibrationClient({
         <div className="mt-10 flex justify-end">
           <a
             href="/"
-            className="rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
+            className="rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors"
           >
             Continue to Dashboard →
           </a>

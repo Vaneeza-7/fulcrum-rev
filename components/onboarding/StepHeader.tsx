@@ -19,15 +19,15 @@ export function StepHeader({
             key={i}
             className={`h-2 flex-1 rounded-full ${
               i + 1 < currentStep
-                ? 'bg-cyan-600'
+                ? 'bg-brand-cyan'
                 : i + 1 === currentStep
-                  ? 'bg-cyan-400'
+                  ? 'bg-brand-cyan/70'
                   : 'bg-gray-800'
             }`}
           />
         ))}
       </div>
-      <div className="mb-2 text-sm text-cyan-400 font-medium uppercase tracking-wide">
+      <div className="mb-2 text-sm text-brand-cyan font-medium uppercase tracking-wide">
         Step {currentStep} of {totalSteps}
       </div>
       <h1 className="text-3xl font-bold mb-2">{title}</h1>

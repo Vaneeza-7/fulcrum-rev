@@ -93,7 +93,7 @@ export function LeadsClient({ initialLeads, statusCounts }: LeadsClientProps) {
             onClick={() => setStatusFilter(null)}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               !statusFilter
-                ? 'bg-cyan-600 text-white'
+                ? 'bg-brand-cyan text-white'
                 : 'bg-gray-800 text-gray-400 hover:text-white'
             }`}
           >
@@ -108,7 +108,7 @@ export function LeadsClient({ initialLeads, statusCounts }: LeadsClientProps) {
                 onClick={() => setStatusFilter(statusFilter === key ? null : key)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                   statusFilter === key
-                    ? 'bg-cyan-600 text-white'
+                    ? 'bg-brand-cyan text-white'
                     : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
               >
@@ -125,7 +125,7 @@ export function LeadsClient({ initialLeads, statusCounts }: LeadsClientProps) {
               onClick={() => setGradeFilter(gradeFilter === grade ? null : grade)}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 gradeFilter === grade
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-brand-cyan text-white'
                   : 'bg-gray-800 text-gray-400 hover:text-white'
               }`}
             >
@@ -150,7 +150,7 @@ export function LeadsClient({ initialLeads, statusCounts }: LeadsClientProps) {
                     </p>
                   </div>
                   <div className="flex items-center gap-3 ml-4">
-                    <span className="text-sm font-semibold text-cyan-400">
+                    <span className="text-sm font-semibold text-brand-cyan">
                       {lead.fulcrumScore}
                     </span>
                     <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-300">

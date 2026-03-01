@@ -89,7 +89,7 @@ export function IntegrationEditor({
               onClick={() => setCrmType(opt.value)}
               className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                 crmType === opt.value
-                  ? 'border-cyan-600 bg-cyan-600/10 text-cyan-400'
+                  ? 'border-brand-cyan bg-brand-cyan/10 text-brand-cyan'
                   : 'border-gray-700 text-gray-400 hover:border-gray-500'
               }`}
             >
@@ -164,7 +164,7 @@ export function IntegrationEditor({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? 'Saving...' : saveLabel}
         </button>

@@ -136,11 +136,14 @@ export async function scoreLead(
       industry_pts: fit.industry_pts,
       revenue_pts: fit.revenue_pts,
       role_pts: fit.role_pts,
-      signals: signals.map((s) => ({
-        type: s.signal_type,
-        raw_score: s.signal_score / getTimeDecayMultiplier(s.days_ago) || s.signal_score,
-        decayed_score: s.signal_score,
-      })),
+      signals: signals.map((s) => {
+        const multiplier = getTimeDecayMultiplier(s.days_ago);
+        return {
+          type: s.signal_type,
+          raw_score: multiplier > 0 ? s.signal_score / multiplier : s.signal_score,
+          decayed_score: s.signal_score,
+        };
+      }),
     },
   };
 }

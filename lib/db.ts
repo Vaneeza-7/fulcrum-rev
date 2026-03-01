@@ -1,18 +1,10 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaNeon } from '@prisma/adapter-neon';
-import { tenantIsolationMiddleware } from './db-middleware';
 
 function createPrismaClient(): PrismaClient {
   const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
-  const client = new PrismaClient({ adapter }) as unknown as PrismaClient;
-
-  // Register tenant isolation middleware (skip if $use unavailable, e.g. in test mocks)
-  if (typeof (client as any).$use === 'function') {
-    (client as any).$use(tenantIsolationMiddleware());
-  }
-
-  return client;
+  return new PrismaClient({ adapter }) as unknown as PrismaClient;
 }
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };

@@ -38,8 +38,8 @@ export class HubSpotConnector extends CRMConnector {
     });
 
     if (!response.ok) {
-      console.error('HubSpot auth failed:', response.status, await response.text());
-      return false;
+      const errorText = await response.text();
+      throw new Error(`HubSpot auth failed (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();

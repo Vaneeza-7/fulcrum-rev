@@ -55,7 +55,7 @@ export function AIConfidenceMeter({
           className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
           style={{
             width: `${actualPct}%`,
-            backgroundColor: '#00BCD4',
+            backgroundColor: '#27e7fe',
           }}
         />
 
@@ -67,7 +67,7 @@ export function AIConfidenceMeter({
               style={{
                 left: `${actualPct}%`,
                 width: `${ghostWidthPct}%`,
-                backgroundColor: 'rgba(0, 188, 212, 0.35)',
+                backgroundColor: 'rgba(39, 231, 254, 0.35)',
               }}
               initial={{ opacity: 0, scaleX: 0.8 }}
               animate={{
@@ -101,7 +101,7 @@ export function AIConfidenceMeter({
               }
             </p>
             {hasPendingFeedback && (
-              <p className="text-xs text-cyan-400 mt-1 font-medium">
+              <p className="text-xs text-brand-cyan mt-1 font-medium">
                 ↑ Projected: {ghostPct}% (pending sync)
               </p>
             )}

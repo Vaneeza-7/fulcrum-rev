@@ -112,7 +112,7 @@ export function Step2ICPClient({ initialData }: Props) {
                 onClick={() => toggleIndustry(ind)}
                 className={`rounded-lg px-3 py-2 text-sm text-left transition-colors ${
                   targetIndustries.includes(ind)
-                    ? 'bg-cyan-600/20 border border-cyan-600/40 text-cyan-400'
+                    ? 'bg-brand-cyan/20 border border-brand-cyan/40 text-brand-cyan'
                     : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
                 }`}
               >
@@ -120,7 +120,7 @@ export function Step2ICPClient({ initialData }: Props) {
                   <span
                     className={`flex h-4 w-4 items-center justify-center rounded border text-xs ${
                       targetIndustries.includes(ind)
-                        ? 'border-cyan-500 bg-cyan-600 text-white'
+                        ? 'border-brand-cyan bg-brand-cyan text-white'
                         : 'border-gray-600'
                     }`}
                   >
@@ -152,7 +152,7 @@ export function Step2ICPClient({ initialData }: Props) {
                 onClick={() => toggleCompanySize(size)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
                   targetCompanySizes.includes(size)
-                    ? 'bg-cyan-600 text-white'
+                    ? 'bg-brand-cyan text-white'
                     : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-300'
                 }`}
               >
@@ -194,7 +194,7 @@ export function Step2ICPClient({ initialData }: Props) {
               value={painPoints}
               onChange={(e) => setPainPoints(e.target.value)}
               placeholder="What problems do your ideal customers struggle with?"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
 
@@ -207,7 +207,7 @@ export function Step2ICPClient({ initialData }: Props) {
               value={buyingSignals}
               onChange={(e) => setBuyingSignals(e.target.value)}
               placeholder="What events indicate a prospect is ready to buy? (e.g., new funding, hiring spree, vendor switch)"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
 
@@ -220,7 +220,7 @@ export function Step2ICPClient({ initialData }: Props) {
               value={searchKeywords}
               onChange={(e) => setSearchKeywords(e.target.value)}
               placeholder="What would prospects search for when looking for solutions like yours?"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-600 focus:border-transparent min-h-[80px] resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:border-transparent min-h-[80px] resize-none"
             />
           </div>
         </div>
@@ -230,7 +230,7 @@ export function Step2ICPClient({ initialData }: Props) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Saving...' : 'Continue'}
         </button>

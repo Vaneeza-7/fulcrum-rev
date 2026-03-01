@@ -15,7 +15,7 @@ model Tenant {
   clerkOrgId  String?  @unique @map("clerk_org_id")
   name        String
   slug        String   @unique
-  productType String   @map("product_type") // 'hunhu' | 'pulse' | custom
+  productType String   @map("product_type") // 'custom' (set during onboarding)
   crmType     String?  @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce' | null
   crmConfig   Json     @default("{}") @map("crm_config")
   isActive    Boolean  @default(true) @map("is_active")

@@ -58,7 +58,7 @@ export function TimezoneSelector({ value, onChange }: TimezoneSelectorProps) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-cyan-600 focus:border-cyan-600"
+      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-brand-cyan focus:border-brand-cyan"
     >
       {TIMEZONE_GROUPS.map((group) => (
         <optgroup key={group.label} label={group.label}>

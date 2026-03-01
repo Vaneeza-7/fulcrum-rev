@@ -34,8 +34,8 @@ export class SalesforceConnector extends CRMConnector {
     });
 
     if (!response.ok) {
-      console.error('Salesforce auth failed:', response.status, await response.text());
-      return false;
+      const errorText = await response.text();
+      throw new Error(`Salesforce auth failed (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();

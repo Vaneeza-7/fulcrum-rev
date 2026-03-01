@@ -30,8 +30,8 @@ export class ZohoConnector extends CRMConnector {
     });
 
     if (!response.ok) {
-      console.error('Zoho auth failed:', response.status, await response.text());
-      return false;
+      const errorText = await response.text();
+      throw new Error(`Zoho auth failed (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
@@ -85,9 +85,13 @@ export class ZohoConnector extends CRMConnector {
 
     const result = await this.request('POST', '/Leads', {
       data: [zohoLead],
-    }) as { data: Array<{ details: { id: string } }> };
+    }) as { data?: Array<{ details?: { id: string } }> };
 
-    return result.data[0].details.id;
+    const leadId = result.data?.[0]?.details?.id;
+    if (!leadId) {
+      throw new Error('Zoho createLead: API returned no lead ID');
+    }
+    return leadId;
   }
 
   async updateLead(crmLeadId: string, data: Partial<CRMLeadData>): Promise<boolean> {
@@ -169,9 +173,13 @@ export class ZohoConnector extends CRMConnector {
         se_module: 'Deals',
         Status: 'Not Started',
       }],
-    }) as { data: Array<{ details: { id: string } }> };
+    }) as { data?: Array<{ details?: { id: string } }> };
 
-    return result.data[0].details.id;
+    const taskId = result.data?.[0]?.details?.id;
+    if (!taskId) {
+      throw new Error('Zoho createTask: API returned no task ID');
+    }
+    return taskId;
   }
 
   async addTag(dealId: string, tag: string): Promise<boolean> {

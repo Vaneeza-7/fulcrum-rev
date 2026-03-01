@@ -82,7 +82,7 @@ export function KeywordEditor({ initialKeywords, onSave, saveLabel = 'Save & Con
                 max={10}
                 value={k.intentScore}
                 onChange={(e) => updateKeyword(i, 'intentScore', Number(e.target.value))}
-                className="w-full accent-cyan-600"
+                className="w-full accent-brand-cyan"
               />
             </div>
             <input
@@ -106,7 +106,7 @@ export function KeywordEditor({ initialKeywords, onSave, saveLabel = 'Save & Con
       <button
         onClick={handleSave}
         disabled={saving || keywords.some((k) => !k.keyword)}
-        className="w-full rounded-lg bg-cyan-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {saving ? 'Saving...' : saveLabel}
       </button>

@@ -3,6 +3,27 @@ import { SlackCommissionAlert, SlackReconciliationSummary } from '@/lib/icm/type
 import type { MonthlyContentReport } from '@/lib/content/types';
 import type { PersonaSnippet } from '@prisma/client';
 
+/** Get the display label for a CRM type. */
+function getCrmLabel(crmType?: string): string {
+  switch (crmType) {
+    case 'hubspot': return 'HubSpot';
+    case 'salesforce': return 'Salesforce';
+    case 'zoho': return 'Zoho';
+    default: return 'CRM';
+  }
+}
+
+/** Build a deep-link URL for a specific lead in the CRM. */
+function getCrmLeadUrl(crmType?: string, orgId?: string, leadId?: string): string | null {
+  if (!orgId || !leadId) return null;
+  switch (crmType) {
+    case 'zoho': return `https://crm.zoho.com/crm/org${orgId}/tab/Leads/${leadId}`;
+    case 'hubspot': return `https://app.hubspot.com/contacts/${orgId}/contact/${leadId}`;
+    case 'salesforce': return `https://${orgId}.lightning.force.com/lightning/r/Lead/${leadId}/view`;
+    default: return null;
+  }
+}
+
 /**
  * Build Slack Block Kit message for the daily pipeline summary.
  */
@@ -46,25 +67,28 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
       },
     ];
 
-    if (lead.crm_lead_id && summary.zoho_org_id) {
-      buttons.push({
-        type: 'button',
-        text: { type: 'plain_text', text: 'View in Zoho' },
-        url: `https://crm.zoho.com/crm/org${summary.zoho_org_id}/tab/Leads/${lead.crm_lead_id}`,
-        action_id: `open_zoho_${lead.lead_id}`,
-      });
+    if (lead.crm_lead_id && summary.crm_org_id) {
+      const crmUrl = getCrmLeadUrl(summary.crm_type, summary.crm_org_id, lead.crm_lead_id);
+      if (crmUrl) {
+        buttons.push({
+          type: 'button',
+          text: { type: 'plain_text', text: `View in ${getCrmLabel(summary.crm_type)}` },
+          url: crmUrl,
+          action_id: `open_crm_${lead.lead_id}`,
+        });
+      }
     }
 
     blocks.push({ type: 'actions', elements: buttons });
   }
 
-  // Per-brand Zoho leads list link
-  if (summary.zoho_leads_url) {
+  // Per-brand CRM leads list link
+  if (summary.crm_leads_url) {
     blocks.push({
       type: 'context',
       elements: [{
         type: 'mrkdwn',
-        text: `<${summary.zoho_leads_url}|View all ${summary.tenant_name} leads in Zoho CRM>`,
+        text: `<${summary.crm_leads_url}|View all ${summary.tenant_name} leads in ${getCrmLabel(summary.crm_type)}>`,
       }],
     });
   }
@@ -114,7 +138,7 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
 /**
  * Build a single lead review card with approve/reject buttons.
  */
-export function buildLeadReviewBlocks(lead: SlackLeadCard, zohoOrgId?: string) {
+export function buildLeadReviewBlocks(lead: SlackLeadCard, crmOrgId?: string, crmType?: string) {
   const actionElements: unknown[] = [
     {
       type: 'button',
@@ -138,13 +162,16 @@ export function buildLeadReviewBlocks(lead: SlackLeadCard, zohoOrgId?: string) {
     },
   ];
 
-  if (lead.crm_lead_id && zohoOrgId) {
-    actionElements.push({
-      type: 'button',
-      text: { type: 'plain_text', text: 'View in Zoho' },
-      url: `https://crm.zoho.com/crm/org${zohoOrgId}/tab/Leads/${lead.crm_lead_id}`,
-      action_id: 'open_zoho_review',
-    });
+  if (lead.crm_lead_id && crmOrgId) {
+    const crmUrl = getCrmLeadUrl(crmType, crmOrgId, lead.crm_lead_id);
+    if (crmUrl) {
+      actionElements.push({
+        type: 'button',
+        text: { type: 'plain_text', text: `View in ${getCrmLabel(crmType)}` },
+        url: crmUrl,
+        action_id: 'open_crm_review',
+      });
+    }
   }
 
   return [
