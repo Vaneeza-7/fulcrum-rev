@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "/Users/joereed/fulcrum-rev/app/sign-in"
+    ],
+    "allow": [
+      "Bash(git rm app/sign-in/[[...sign-in]]/page.tsx app/sign-up/[[...sign-up]]/page.tsx middleware.ts)"
+    ]
+  }
+}
