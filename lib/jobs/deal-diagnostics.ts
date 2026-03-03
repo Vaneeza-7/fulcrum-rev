@@ -1,12 +1,13 @@
 import { prisma, auditLog } from '@/lib/db';
 import { CRMFactory } from '@/lib/crm/factory';
-import { CRMAuthConfig, CRMDeal } from '@/lib/crm/types';
+import { CRMDeal } from '@/lib/crm/types';
 import { askClaudeJson } from '@/lib/ai/claude';
 import { REENGAGEMENT_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { ReengagementResult } from '@/lib/ai/types';
 import { sendStallAlert } from '@/lib/huck/proactive';
 import { SlackDealAlert } from '@/lib/slack/types';
 import { jobLogger } from '@/lib/logger';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 const log = jobLogger('deal_diagnostics');
 
@@ -51,7 +52,12 @@ export async function runDealDiagnostics(tenantId: string): Promise<{ checked: n
   if (!tenant.crmType) {
     return { checked: 0, stalled: 0, alerts: [] };
   }
-  const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
+  const crmConfig = decryptCrmConfig(tenant.crmConfig);
+  if (!crmConfig) {
+    throw new Error('CRM config missing or unreadable');
+  }
+
+  const crm = CRMFactory.create(tenant.crmType, crmConfig);
   await crm.authenticate();
 
   // Fetch active deals

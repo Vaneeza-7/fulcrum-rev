@@ -2,11 +2,22 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useCalibrationGhost } from '@/hooks/useCalibrationGhost'
 import { AIConfidenceMeter } from '@/components/ui/AIConfidenceMeter'
 import { StepHeader } from '@/components/onboarding/StepHeader'
 import { SwipeableLeadCard } from '@/components/hitl/SwipeableLeadCard'
 import { ReasonChipDrawer } from '@/components/hitl/ReasonChipDrawer'
+
+const CHIP_TO_REJECT_REASON: Record<string, string> = {
+  wrong_industry: 'WRONG_ICP',
+  low_budget: 'OTHER',
+  already_customer: 'ALREADY_CUSTOMER',
+  not_decision_maker: 'OTHER',
+  bad_timing: 'BAD_TIMING',
+  duplicate: 'OTHER',
+  other: 'OTHER',
+}
 
 interface Lead {
   id: string
@@ -62,20 +73,9 @@ export function Step6CalibrationClient({
     }
   }, [applyHITLAction])
 
-  // Map chip IDs to the NegativeReason enum values the API expects
-  const chipToRejectReason: Record<string, string> = {
-    wrong_industry: 'WRONG_ICP',
-    low_budget: 'OTHER',
-    already_customer: 'ALREADY_CUSTOMER',
-    not_decision_maker: 'OTHER',
-    bad_timing: 'BAD_TIMING',
-    duplicate: 'OTHER',
-    other: 'OTHER',
-  }
-
   const handleRejectWithReasons = useCallback(async (reasonIds: string[]) => {
     if (!pendingRejectLeadId) return
-    const primaryReason = chipToRejectReason[reasonIds[0]] ?? 'OTHER'
+    const primaryReason = CHIP_TO_REJECT_REASON[reasonIds[0]] ?? 'OTHER'
     try {
       const res = await fetch('/api/hitl/feedback', {
         method: 'POST',
@@ -208,17 +208,17 @@ export function Step6CalibrationClient({
 
         {/* Continue button */}
         <div className="mt-10 flex justify-end">
-          <a
+          <Link
             href="/"
             className="rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors"
           >
             Continue to Dashboard →
-          </a>
+          </Link>
         </div>
 
-        <a href="/step-5" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-400">
+        <Link href="/step-5" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-400">
           Back
-        </a>
+        </Link>
 
       {/* Rejection reason drawer */}
       <ReasonChipDrawer

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { prisma } from '@/lib/db'
+import { getTenantBillingSummary } from '@/lib/billing/summary'
 
 import type { IntegrityStatus } from '@/lib/types/integrity'
 export type { IntegrityStatus }
@@ -40,9 +41,29 @@ export async function GET(): Promise<NextResponse<IntegrityResponse>> {
   const details: IntegrityDetail[] = []
 
   // ---- SIGNAL 1: Credit Balance ----
-  // TODO: Replace with actual credit balance lookup when the billing system is
-  // implemented. For now, always GREEN since no credit model exists yet.
-  details.push({ signal: 'credits', status: 'GREEN', message: 'Credits healthy.' })
+  const billingSummary = await getTenantBillingSummary(tenantId)
+  if (!billingSummary.billing.planSlug || !['active', 'trialing'].includes(billingSummary.billing.subscriptionStatus)) {
+    details.push({ signal: 'credits', status: 'RED', message: 'Billing is inactive or payment has failed.' })
+  } else {
+    const ratio =
+      billingSummary.billing.includedCredits > 0
+        ? billingSummary.billing.remainingIncludedCredits / billingSummary.billing.includedCredits
+        : 0
+
+    if (ratio <= 0.2) {
+      details.push({
+        signal: 'credits',
+        status: 'AMBER',
+        message: `${billingSummary.billing.remainingIncludedCredits.toFixed(2)} credits remaining before overage.`,
+      })
+    } else {
+      details.push({
+        signal: 'credits',
+        status: 'GREEN',
+        message: `${billingSummary.billing.remainingIncludedCredits.toFixed(2)} credits remaining.`,
+      })
+    }
+  }
 
   // ---- SIGNAL 2: Queue Backlog Detection ----
   // Check for leads stuck in non-terminal states for more than 2 hours

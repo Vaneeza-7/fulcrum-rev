@@ -20,6 +20,15 @@ export function encryptTenantConfig<T>(config: T): T | string {
 }
 
 /**
+ * Encrypt a single secret string for storage in a string column.
+ * Returns the raw string when encryption is disabled.
+ */
+export function encryptTenantSecret(secret: string): string {
+  if (!isEncryptionEnabled()) return secret;
+  return encryptJson(secret, ENCRYPTION_KEY!);
+}
+
+/**
  * Decrypt a tenant config value read from the database.
  * Handles both encrypted strings and plaintext JSON objects (migration-friendly).
  */
@@ -53,4 +62,26 @@ export function decryptTenantConfig<T>(stored: T | string | null): T | null {
   }
 
   return null;
+}
+
+/**
+ * Decrypt a tenant secret stored in a string column.
+ * Supports encrypted values, JSON-stringified plaintext, and legacy raw strings.
+ */
+export function decryptTenantSecret(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+
+  if (isEncryptionEnabled()) {
+    try {
+      return decryptJson<string>(stored, ENCRYPTION_KEY!);
+    } catch {
+      // Fall through to legacy plaintext handling.
+    }
+  }
+
+  try {
+    return JSON.parse(stored) as string;
+  } catch {
+    return stored;
+  }
 }

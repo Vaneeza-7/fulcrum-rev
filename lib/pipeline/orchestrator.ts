@@ -1,10 +1,9 @@
 import { prisma, auditLog } from '@/lib/db';
-import { scrapeForTenant } from './scraper';
 import { deduplicateProfiles } from './deduplicator';
-import { enrichProfile } from './enricher';
+import { enrichProfileWithUsage } from './enricher';
 import { detectSignals } from './signal-detector';
 import { scoreLead } from './scorer';
-import { generateFirstLine } from './first-line';
+import { generateFirstLineWithUsage } from './first-line';
 import { PipelineResult } from './types';
 import { ROISourceTagger } from '@/lib/roi/source-tagger';
 import { FulcrumSourceType } from '@prisma/client';
@@ -13,6 +12,9 @@ import { jobLogger } from '@/lib/logger';
 import { pushLeadToCRM } from '@/lib/jobs/crm-push';
 import { sendPipelineSummary } from '@/lib/slack/client';
 import { SlackLeadCard, SlackPipelineSummary } from '@/lib/slack/types';
+import { decryptCrmConfig } from '@/lib/settings/crm';
+import { LeadDiscoveryService } from '@/lib/discovery/service';
+import { recordDiscoveryLeadUsage, recordEnrichmentUsage, recordFirstLineUsage } from '@/lib/billing/usage';
 
 const log = jobLogger('pipeline-orchestrator');
 
@@ -35,16 +37,40 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
       intentKeywords: { where: { isActive: true } },
     },
   });
-
-  // 1. SCRAPE - Run LinkedIn searches
-  const queries = tenant.searchQueries.map((q) => ({
-    searchQuery: q.searchQuery as Record<string, unknown>,
-    maxResults: q.maxResults,
-  }));
+  const decryptedCrmConfig = decryptCrmConfig(tenant.crmConfig);
 
   let profiles;
+  let discoveryDiagnostics: string[] = [];
+  let providerUsed: string | undefined;
+  let providerFallbackUsed = false;
+  let anthropicApiKey: string | undefined;
+  let anthropicUsingTenantKey = false;
+  let discoveryProviderUsesTenantKey = false;
   try {
-    profiles = await scrapeForTenant(queries);
+    const discoveryResult = await LeadDiscoveryService.discoverForTenant({
+      id: tenant.id,
+      slug: tenant.slug,
+      leadDiscoveryProvider: tenant.leadDiscoveryProvider,
+      instantlyConfig: tenant.instantlyConfig,
+      apifyApiToken: tenant.apifyApiToken,
+      anthropicApiKey: tenant.anthropicApiKey,
+      searchQueries: tenant.searchQueries.map((q) => ({
+        queryName: q.queryName,
+        searchQuery: q.searchQuery,
+        maxResults: q.maxResults,
+      })),
+    });
+
+    profiles = discoveryResult.profiles;
+    discoveryDiagnostics = discoveryResult.diagnostics;
+    providerUsed = discoveryResult.providerUsed;
+    providerFallbackUsed = discoveryResult.providerFallbackUsed;
+    anthropicApiKey = discoveryResult.credentials.anthropic.apiKey ?? undefined;
+    anthropicUsingTenantKey = discoveryResult.credentials.anthropic.usingTenantKey;
+    discoveryProviderUsesTenantKey =
+      discoveryResult.providerUsed === 'apify'
+        ? discoveryResult.credentials.apify.usingTenantKey
+        : discoveryResult.credentials.instantly.usingTenantKey;
   } catch (error) {
     const msg = `Scraping failed: ${error}`;
     errors.push(msg);
@@ -59,6 +85,9 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     total: profiles.length,
     new: newProfiles.length,
     duplicates: duplicateCount,
+    providerUsed,
+    providerFallbackUsed,
+    diagnostics: discoveryDiagnostics,
   });
 
   if (newProfiles.length === 0) {
@@ -88,7 +117,8 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   for (const profile of newProfiles) {
     try {
       // 3. ENRICH
-      const enrichment = await enrichProfile(profile);
+      const enrichmentResult = await enrichProfileWithUsage(profile, { anthropicApiKey });
+      const enrichment = enrichmentResult.enrichment;
       enrichedCount++;
 
       // 4. DETECT SIGNALS
@@ -107,8 +137,21 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
 
       // 6. FIRST LINE (only for B grade and above)
       let firstLine = '';
+      let firstLineUsage:
+        | { usage: { inputTokens: number; outputTokens: number }; model: string }
+        | undefined;
       if (score.fulcrum_score >= 60) {
-        firstLine = await generateFirstLine(profile, enrichment, tenant.productType);
+        const firstLineResult = await generateFirstLineWithUsage(
+          profile,
+          enrichment,
+          tenant.productType,
+          { anthropicApiKey },
+        );
+        firstLine = firstLineResult.firstLine;
+        firstLineUsage = {
+          usage: firstLineResult.usage,
+          model: firstLineResult.model,
+        };
         if (firstLine) firstLineCount++;
       }
 
@@ -150,6 +193,33 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
           status: leadStatus,
         },
       });
+
+      if (providerUsed === 'instantly' || providerUsed === 'apify') {
+        await recordDiscoveryLeadUsage({
+          tenantId,
+          leadId: lead.id,
+          provider: providerUsed,
+          tenantOwnedCredentialUsed: discoveryProviderUsesTenantKey,
+        });
+      }
+
+      await recordEnrichmentUsage({
+        tenantId,
+        leadId: lead.id,
+        usage: enrichmentResult.usage,
+        model: enrichmentResult.model,
+        tenantOwnedCredentialUsed: anthropicUsingTenantKey,
+      });
+
+      if (firstLineUsage) {
+        await recordFirstLineUsage({
+          tenantId,
+          leadId: lead.id,
+          usage: firstLineUsage.usage,
+          model: firstLineUsage.model,
+          tenantOwnedCredentialUsed: anthropicUsingTenantKey,
+        });
+      }
 
       createdLeadRecords.push({
         id: lead.id,
@@ -204,7 +274,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   const pushErrors: string[] = [];
   const crmLeadIds = new Map<string, string>(); // leadId -> crmLeadId
 
-  if (tenant.crmType && tenant.crmConfig) {
+  if (tenant.crmType && decryptedCrmConfig) {
     for (const rec of createdLeadRecords) {
       if (rec.fulcrumScore >= 60) {
         try {
@@ -223,7 +293,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   }
 
   // 9. SLACK NOTIFICATION
-  const crmCfg = tenant.crmConfig as Record<string, unknown>;
+  const crmCfg = (decryptedCrmConfig ?? {}) as Record<string, unknown>;
   const crmOrgId = crmCfg?.org_id as string | undefined;
   const crmCustomViewUrl = crmCfg?.custom_view_url as string | undefined;
   const topLeads: SlackLeadCard[] = createdLeadRecords
@@ -269,6 +339,9 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     firstLines: firstLineCount,
     pushedToCrm: pushedCount,
     grades: gradeDistribution,
+    providerUsed,
+    providerFallbackUsed,
+    diagnostics: discoveryDiagnostics,
   });
 
   return buildResult(

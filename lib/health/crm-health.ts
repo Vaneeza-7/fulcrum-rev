@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/db';
 import { CRMFactory } from '@/lib/crm/factory';
-import type { CRMAuthConfig } from '@/lib/crm/types';
 import { flagStaleLeads, getDataHealthSummary } from './data-freshness';
 import type { HealthCheckResult } from './types';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 /**
  * Check CRM connectivity for a tenant.
@@ -14,7 +14,12 @@ async function checkCRMConnection(tenantId: string): Promise<HealthCheckResult> 
     if (!tenant.crmType) {
       return { checkType: 'crm_connectivity', status: 'healthy', details: { message: 'No CRM configured' } };
     }
-    const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
+    const crmConfig = decryptCrmConfig(tenant.crmConfig);
+    if (!crmConfig) {
+      return { checkType: 'crm_connectivity', status: 'critical', details: { message: 'CRM config missing or unreadable' } };
+    }
+
+    const crm = CRMFactory.create(tenant.crmType, crmConfig);
     await crm.authenticate();
 
     return {

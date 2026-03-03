@@ -1,6 +1,5 @@
 import { prisma, auditLog } from '@/lib/db';
 import { CRMFactory } from '@/lib/crm/factory';
-import { CRMAuthConfig } from '@/lib/crm/types';
 import { processClosedWonDeals } from '@/lib/icm/commission-tracker';
 import { runMatch2Invoice, runMatch3Payment, checkCancellationWindow } from '@/lib/icm/triple-match';
 import { calculateCommission } from '@/lib/icm/commission-calculator';
@@ -9,6 +8,7 @@ import { ReconciliationResult, ClosedWonDeal } from '@/lib/icm/types';
 import { getSlackClient } from '@/lib/slack/client';
 import { buildReconciliationSummaryBlocks, buildCommissionAlertBlocks } from '@/lib/slack/blocks';
 import { jobLogger } from '@/lib/logger';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 const _log = jobLogger('icm_reconciliation');
 
@@ -67,7 +67,13 @@ export async function runICMReconciliation(tenantId: string): Promise<Reconcilia
       result.errors.push('No CRM configured for this tenant');
       return result;
     }
-    const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
+    const crmConfig = decryptCrmConfig(tenant.crmConfig);
+    if (!crmConfig) {
+      result.errors.push('CRM config missing or unreadable');
+      return result;
+    }
+
+    const crm = CRMFactory.create(tenant.crmType, crmConfig);
     await crm.authenticate();
 
     // Get deals closed in the last 7 days (overlap for safety)

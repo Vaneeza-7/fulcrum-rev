@@ -70,9 +70,12 @@ export function SystemIntegrityPulse({
   }, [])
 
   useEffect(() => {
-    fetchIntegrity()
+    const initialFetch = setTimeout(fetchIntegrity, 0)
     const interval = setInterval(fetchIntegrity, pollIntervalMs)
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(initialFetch)
+      clearInterval(interval)
+    }
   }, [fetchIntegrity, pollIntervalMs])
 
   if (!data) {

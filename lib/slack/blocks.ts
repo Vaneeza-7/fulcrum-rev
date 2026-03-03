@@ -45,6 +45,30 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
         text: `*${summary.profiles_new} new leads* discovered (${summary.profiles_scraped} scraped)\n${gradeText}`,
       },
     },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Push All A+ to CRM' },
+          style: 'primary',
+          action_id: 'push_all_aplus',
+          value: JSON.stringify({ grades: ['A+'] }),
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Review All Leads' },
+          action_id: 'review_leads',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Reject D Grade' },
+          style: 'danger',
+          action_id: 'reject_grade',
+          value: JSON.stringify({ grades: ['D'] }),
+        },
+      ],
+    },
     { type: 'divider' },
   ];
 
@@ -92,35 +116,6 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
       }],
     });
   }
-
-  // Action buttons
-  blocks.push(
-    { type: 'divider' },
-    {
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Push All A+ to CRM' },
-          style: 'primary',
-          action_id: 'push_all_aplus',
-          value: JSON.stringify({ grades: ['A+'] }),
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Review All Leads' },
-          action_id: 'review_leads',
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Reject D Grade' },
-          style: 'danger',
-          action_id: 'reject_grade',
-          value: JSON.stringify({ grades: ['D'] }),
-        },
-      ],
-    }
-  );
 
   if (summary.errors.length > 0) {
     blocks.push({

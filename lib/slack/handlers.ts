@@ -1,11 +1,11 @@
 import { prisma, auditLog } from '@/lib/db';
 import { CRMFactory } from '@/lib/crm/factory';
-import { CRMAuthConfig } from '@/lib/crm/types';
 import { sendLeadReviewThread } from './client';
 import { SlackLeadCard } from './types';
 import * as monitoringDb from '@/lib/monitoring-db';
 import { HITLProcessor } from '@/lib/hitl/hitl-processor';
 import { NegativeReason } from '@prisma/client';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 /**
  * Handle "Push All A+" button click.
@@ -24,7 +24,12 @@ export async function handlePushAllAPlus(tenantId: string): Promise<{ pushed: nu
   if (!tenant.crmType) {
     return { pushed: 0, errors: ['No CRM configured for this tenant'] };
   }
-  const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
+  const crmConfig = decryptCrmConfig(tenant.crmConfig);
+  if (!crmConfig) {
+    return { pushed: 0, errors: ['CRM config missing or unreadable'] };
+  }
+
+  const crm = CRMFactory.create(tenant.crmType, crmConfig);
   await crm.authenticate();
 
   let pushed = 0;
@@ -83,7 +88,12 @@ export async function handleApproveLead(tenantId: string, leadId: string): Promi
     if (!tenant.crmType) {
       return { success: false, error: 'No CRM configured for this tenant' };
     }
-    const crm = CRMFactory.create(tenant.crmType, tenant.crmConfig as CRMAuthConfig);
+    const crmConfig = decryptCrmConfig(tenant.crmConfig);
+    if (!crmConfig) {
+      return { success: false, error: 'CRM config missing or unreadable' };
+    }
+
+    const crm = CRMFactory.create(tenant.crmType, crmConfig);
     await crm.authenticate();
 
     const nameParts = lead.fullName.split(' ');

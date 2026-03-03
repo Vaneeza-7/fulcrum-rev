@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
+import { getTenantCrmSettings } from '@/lib/settings/crm'
 import { SettingsClient } from './SettingsClient'
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +29,8 @@ export default async function SettingsPage() {
     },
   })
   if (!tenant) redirect('/step-1')
+
+  const crm = await getTenantCrmSettings(prisma, tenant.id)
 
   const queries = tenant.searchQueries.map((q) => ({
     queryName: q.queryName,
@@ -65,11 +68,12 @@ export default async function SettingsPage() {
         name: tenant.name,
         productType: tenant.productType,
         crmType: tenant.crmType ?? 'zoho',
-        crmConfig: tenant.crmConfig as Record<string, string>,
+        crmConfig: {},
       }}
       searchQueries={queries}
       intentKeywords={keywords}
       scoringConfig={scoring}
+      hasCrm={crm.hasTenantConfig}
       hasSlack={!!tenant.slackConfig}
     />
   )

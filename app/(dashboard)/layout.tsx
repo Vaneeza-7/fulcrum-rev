@@ -4,6 +4,7 @@ import { CreateOrganization } from '@clerk/nextjs'
 import { prisma } from '@/lib/db'
 import { CleanSlateProvider } from '@/components/providers/CleanSlateProvider'
 import { SidebarIntegritySlot } from '@/components/sidebar/SidebarIntegritySlot'
+import { getTenantBillingSummary } from '@/lib/billing/summary'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard' },
@@ -56,10 +57,8 @@ export default async function DashboardLayout({
     where: { tenantId: tenant.id, status: 'cancelled_creditzero' },
   })
 
-  // TODO: Replace with actual credit balance lookup when the credit/billing
-  // system is implemented. Until then the modal stays dormant (creditBalance 0
-  // means useCleanSlate never fires).
-  const creditBalance = 0
+  const billingSummary = await getTenantBillingSummary(tenant.id)
+  const creditBalance = billingSummary.billing.remainingIncludedCredits
 
   return (
     <CleanSlateProvider cancelledCount={cancelledCount} creditBalance={creditBalance}>

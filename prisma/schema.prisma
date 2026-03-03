@@ -11,16 +11,20 @@ datasource db {
 // TENANTS (organizations/customers)
 // ============================================================================
 model Tenant {
-  id          String   @id @default(uuid()) @db.Uuid
-  clerkOrgId  String?  @unique @map("clerk_org_id")
-  name        String
-  slug        String   @unique
-  productType String   @map("product_type") // 'custom' (set during onboarding)
-  crmType     String?  @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce' | null
-  crmConfig   Json     @default("{}") @map("crm_config")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid()) @db.Uuid
+  clerkOrgId            String?  @unique @map("clerk_org_id")
+  name                  String
+  slug                  String   @unique
+  productType           String   @map("product_type") // 'custom' (set during onboarding)
+  crmType               String?  @map("crm_type") // 'zoho' | 'hubspot' | 'salesforce' | null
+  crmConfig             Json     @default("{}") @map("crm_config")
+  leadDiscoveryProvider String   @default("instantly") @map("lead_discovery_provider")
+  instantlyConfig       Json     @default("{}") @map("instantly_config")
+  apifyApiToken         String?  @map("apify_api_token")
+  anthropicApiKey       String?  @map("anthropic_api_key")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   // ICM (Incentive Compensation Management)
   businessModel     String    @default("usage_based") @map("business_model") // 'usage_based' | 'performance_based'
@@ -46,6 +50,7 @@ model Tenant {
   intentKeywords       TenantIntentKeyword[]
   scoringConfigs       TenantScoringConfig[]
   slackConfig          TenantSlackConfig?
+  billingAccount       TenantBillingAccount?
   conversationMessages ConversationMessage[]
   onboardingWorkflows  OnboardingWorkflow[]
   systemHealthChecks   SystemHealthCheck[]
@@ -67,6 +72,7 @@ model Tenant {
   modelCalibrations    ModelCalibration[]
   fulcrumSourceTags    FulcrumSourceTag[]
   roiAttributions      ROIAttribution[]
+  creditLedgerEntries  FulcrumCreditLedger[]
   negativeSignals      NegativeSignal[]
   profile              TenantProfile?
   competitors          TenantCompetitor[]
@@ -357,6 +363,63 @@ model TenantSlackConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("tenant_slack_configs")
+}
+
+model TenantBillingAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @unique @map("tenant_id") @db.Uuid
+  stripeCustomerId      String?  @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?  @unique @map("stripe_subscription_id")
+  stripeOverageSubscriptionItemId String? @map("stripe_overage_subscription_item_id")
+  subscriptionStatus    String   @default("inactive") @map("subscription_status")
+  planSlug              String?  @map("plan_slug")
+  currentPeriodStart    DateTime? @map("current_period_start")
+  currentPeriodEnd      DateTime? @map("current_period_end")
+  billingEmail          String?  @map("billing_email")
+  lowCreditThresholdPct Decimal  @default(0.8) @map("low_credit_threshold_pct") @db.Decimal(5, 4)
+  reportedOverageCredits Decimal @default(0) @map("reported_overage_credits") @db.Decimal(12, 4)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionStatus])
+  @@index([planSlug])
+  @@map("tenant_billing_accounts")
+}
+
+model FulcrumCreditLedger {
+  id                String    @id @default(uuid()) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  entryType         String    @map("entry_type")
+  source            String
+  provider          String?
+  creditDelta       Decimal   @map("credit_delta") @db.Decimal(12, 4)
+  usdAmountCents    Int       @default(0) @map("usd_amount_cents")
+  metadata          Json      @default("{}")
+  externalReference String?   @map("external_reference")
+  reportedToStripeAt DateTime? @map("reported_to_stripe_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, entryType])
+  @@index([tenantId, source])
+  @@map("fulcrum_credit_ledger")
+}
+
+model StripeWebhookEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  stripeEventId String  @unique @map("stripe_event_id")
+  eventType    String   @map("event_type")
+  processedAt  DateTime @default(now()) @map("processed_at")
+  payloadHash  String   @map("payload_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@map("stripe_webhook_events")
 }
 
 // ============================================================================

@@ -1,7 +1,7 @@
 // hooks/useCalibrationGhost.ts
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 
 export interface CalibrationGhostState {
   calibrationActual: number
@@ -23,15 +23,6 @@ export function useCalibrationGhost(actualFromServer: number): CalibrationGhostS
     const stored = sessionStorage.getItem(GHOST_OFFSET_KEY)
     return stored ? parseFloat(stored) : 0
   })
-
-  useEffect(() => {
-    // Snap ghost back to actual when server returns fresh calibration (post-cron)
-    setCalibrationActual(actualFromServer)
-    setGhostOffset(0)
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(GHOST_OFFSET_KEY)
-    }
-  }, [actualFromServer])
 
   const calibrationGhost = Math.min(
     calibrationActual + ghostOffset,

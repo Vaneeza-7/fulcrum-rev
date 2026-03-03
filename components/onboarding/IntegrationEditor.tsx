@@ -5,6 +5,7 @@ import { useState } from 'react'
 interface IntegrationEditorProps {
   currentCrmType?: string
   currentCrmConfig?: Record<string, string>
+  hasCrm?: boolean
   hasSlack?: boolean
   onSave: (data: {
     crmType?: string
@@ -43,6 +44,7 @@ const CRM_FIELDS: Record<string, Array<{ key: string; label: string; type?: stri
 export function IntegrationEditor({
   currentCrmType,
   currentCrmConfig,
+  hasCrm,
   hasSlack,
   onSave,
   saveLabel = 'Save & Continue',
@@ -82,6 +84,7 @@ export function IntegrationEditor({
       {/* CRM Section */}
       <div className="rounded-xl bg-gray-900 border border-gray-800 p-5 space-y-4">
         <h3 className="text-sm font-medium text-gray-300">CRM Integration</h3>
+        {hasCrm && <p className="text-xs text-emerald-400">Connected. Leave secret fields blank to keep existing values.</p>}
         <div className="flex gap-3">
           {CRM_OPTIONS.map((opt) => (
             <button
@@ -118,6 +121,7 @@ export function IntegrationEditor({
           Slack Notifications
           {hasSlack && <span className="ml-2 text-xs text-emerald-400">Connected</span>}
         </h3>
+        {hasSlack && <p className="text-xs text-emerald-400">Leave bot token blank to keep the stored secret.</p>}
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Bot Token</label>

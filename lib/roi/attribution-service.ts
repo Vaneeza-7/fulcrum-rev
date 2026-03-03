@@ -1,4 +1,5 @@
-import { prisma, auditLog } from '@/lib/db';
+import { prisma } from '@/lib/db';
+import { getLeadLedgerSpend } from '@/lib/billing/ledger';
 
 export class ROIAttributionService {
 
@@ -11,13 +12,7 @@ export class ROIAttributionService {
    * metadata references this leadId.
    */
   static async syncCreditSpend(tenantId: string, leadId: string): Promise<void> {
-    // PLACEHOLDER: FulcrumCreditLedger does not exist yet.
-    // When implemented, replace this with:
-    //   const ledgerEntries = await prisma.fulcrumCreditLedger.findMany({
-    //     where: { tenantId, metadata: { path: ['leadId'], equals: leadId } }
-    //   });
-    //   const totalSpend = ledgerEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
-    const totalSpend = 0;
+    const totalSpend = (await getLeadLedgerSpend(tenantId, leadId)).usdAmountCents / 100;
 
     await prisma.rOIAttribution.updateMany({
       where: { tenantId, leadId },

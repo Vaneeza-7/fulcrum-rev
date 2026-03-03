@@ -1,4 +1,4 @@
-import { askClaude } from '@/lib/ai/claude';
+import { askClaudeWithUsage, type ClaudeCallResult } from '@/lib/ai/claude';
 import { FIRST_LINE_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { EnrichmentResult } from '@/lib/ai/types';
 import { LinkedInProfile } from './types';
@@ -10,8 +10,19 @@ import { LinkedInProfile } from './types';
 export async function generateFirstLine(
   profile: LinkedInProfile,
   enrichment: EnrichmentResult,
-  productContext: string
+  productContext: string,
+  options?: { anthropicApiKey?: string },
 ): Promise<string> {
+  const result = await generateFirstLineWithUsage(profile, enrichment, productContext, options)
+  return result.firstLine
+}
+
+export async function generateFirstLineWithUsage(
+  profile: LinkedInProfile,
+  enrichment: EnrichmentResult,
+  productContext: string,
+  options?: { anthropicApiKey?: string },
+): Promise<{ firstLine: string; usage: ClaudeCallResult['usage']; model: string }> {
   const userMessage = `
 Prospect:
 - Name: ${profile.full_name}
@@ -32,14 +43,25 @@ Write a personalized first line for a cold email to ${profile.full_name}.
 `;
 
   try {
-    const firstLine = await askClaude(
+    const firstLine = await askClaudeWithUsage(
       FIRST_LINE_SYSTEM_PROMPT,
       userMessage,
-      { maxTokens: 150 }
+      { maxTokens: 150, apiKey: options?.anthropicApiKey }
     );
-    return firstLine.trim();
+    return {
+      firstLine: firstLine.text.trim(),
+      usage: firstLine.usage,
+      model: firstLine.model,
+    };
   } catch (error) {
     console.error(`First line generation failed for ${profile.full_name}:`, error);
-    return '';
+    return {
+      firstLine: '',
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+      },
+      model: 'fallback',
+    };
   }
 }

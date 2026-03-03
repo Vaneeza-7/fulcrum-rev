@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
+import { getTenantCrmSettings } from '@/lib/settings/crm'
 import { Step4DeliveryClient } from './Step4DeliveryClient'
 
 export const metadata = {
@@ -27,7 +28,7 @@ export default async function Step4Page() {
   if (!tenant) redirect('/step-1')
 
   const delivery = tenant.deliveryPreference
-  const crmConfig = tenant.crmConfig as Record<string, string> | null
+  const crm = await getTenantCrmSettings(prisma, tenant.id)
 
   return (
     <Step4DeliveryClient
@@ -46,7 +47,7 @@ export default async function Step4Page() {
           : undefined
       }
       currentCrmType={tenant.crmType}
-      currentCrmConfig={crmConfig ?? undefined}
+      currentCrmConfig={crm.hasTenantConfig ? {} : undefined}
       hasSlack={!!tenant.slackConfig}
     />
   )

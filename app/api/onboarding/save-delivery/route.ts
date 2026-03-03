@@ -1,6 +1,9 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { ZodError } from 'zod'
 import { prisma } from '@/lib/db'
+import { saveTenantCrmSettings } from '@/lib/settings/crm'
+import { saveTenantSlackSettings } from '@/lib/settings/slack'
 
 export async function POST(request: Request) {
   try {
@@ -61,36 +64,32 @@ export async function POST(request: Request) {
       })
 
       if (crmEnabled && typeof body.crmType === 'string') {
-        await tx.tenant.update({
-          where: { id: tenant.id },
-          data: {
-            crmType: body.crmType,
-            crmConfig: (body.crmConfig ?? {}) as any,
-          },
+        await saveTenantCrmSettings(tx, tenant.id, {
+          crmType: body.crmType,
+          crmConfig: (body.crmConfig ?? {}) as Record<string, string>,
         })
       }
 
       const slackConfig = body.slackConfig as { teamId?: string; botToken?: string; channelId?: string } | undefined
-      if (slackEnabled && slackConfig?.botToken && slackConfig?.channelId) {
-        await tx.tenantSlackConfig.upsert({
-          where: { tenantId: tenant.id },
-          create: {
-            tenantId: tenant.id,
-            teamId: slackConfig.teamId ?? '',
-            botToken: slackConfig.botToken,
-            channelId: slackConfig.channelId,
-          },
-          update: {
-            teamId: slackConfig.teamId ?? '',
-            botToken: slackConfig.botToken,
-            channelId: slackConfig.channelId,
-          },
+      if (slackEnabled && slackConfig?.channelId) {
+        await saveTenantSlackSettings(tx, tenant.id, {
+          teamId: slackConfig.teamId ?? '',
+          botToken: slackConfig.botToken,
+          channelId: slackConfig.channelId,
         })
       }
     })
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: error.issues[0]?.message ?? 'Invalid request' }, { status: 400 })
+    }
+
+    if (error instanceof Error && error.message.includes('botToken')) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
     console.error('save-delivery error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

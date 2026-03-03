@@ -1,5 +1,6 @@
 import { prisma } from '../db';
 import { initializeColdStart } from '@/lib/cold-start';
+import { encryptTenantConfig } from '@/lib/db-crypto';
 
 export interface TenantSeedConfig {
   clerkOrgId?: string;
@@ -39,7 +40,7 @@ export async function seedTenant(config: TenantSeedConfig): Promise<string> {
       slug: config.slug,
       productType: config.productType,
       crmType: config.crmType,
-      crmConfig: config.crmConfig as any,
+      crmConfig: encryptTenantConfig(config.crmConfig ?? {}) as any,
     },
   });
 

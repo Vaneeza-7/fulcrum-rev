@@ -16,6 +16,7 @@ interface SettingsClientProps {
   searchQueries: SearchQuery[]
   intentKeywords: IntentKeyword[]
   scoringConfig: ScoringConfig
+  hasCrm: boolean
   hasSlack: boolean
 }
 
@@ -31,6 +32,7 @@ export function SettingsClient({
   searchQueries,
   intentKeywords,
   scoringConfig,
+  hasCrm,
   hasSlack,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState('queries')
@@ -42,8 +44,8 @@ export function SettingsClient({
   }
 
   async function handleSaveQueries(queries: SearchQuery[]) {
-    const res = await fetch('/api/onboarding/save-queries', {
-      method: 'POST',
+    const res = await fetch('/api/settings/search-queries', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ queries }),
     })
@@ -51,8 +53,8 @@ export function SettingsClient({
   }
 
   async function handleSaveKeywords(keywords: IntentKeyword[]) {
-    const res = await fetch('/api/onboarding/save-keywords', {
-      method: 'POST',
+    const res = await fetch('/api/settings/intent-keywords', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keywords }),
     })
@@ -60,10 +62,10 @@ export function SettingsClient({
   }
 
   async function handleSaveScoring(scoring: ScoringConfig) {
-    const res = await fetch('/api/onboarding/save-scoring', {
-      method: 'POST',
+    const res = await fetch('/api/settings/scoring', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(scoring),
+      body: JSON.stringify({ scoringConfig: scoring }),
     })
     if (res.ok) showSaved()
   }
@@ -73,12 +75,27 @@ export function SettingsClient({
     crmConfig?: Record<string, string>
     slack?: { teamId: string; botToken: string; channelId: string }
   }) {
-    const res = await fetch('/api/onboarding/save-integrations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    if (res.ok) showSaved()
+    const responses = await Promise.all([
+      data.crmType
+        ? fetch('/api/settings/crm', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              crmType: data.crmType,
+              crmConfig: data.crmConfig,
+            }),
+          })
+        : Promise.resolve(new Response(null, { status: 204 })),
+      data.slack
+        ? fetch('/api/settings/slack', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slack: data.slack }),
+          })
+        : Promise.resolve(new Response(null, { status: 204 })),
+    ])
+
+    if (responses.every((response) => response.ok)) showSaved()
   }
 
   return (
@@ -140,6 +157,7 @@ export function SettingsClient({
           <IntegrationEditor
             currentCrmType={tenant.crmType}
             currentCrmConfig={tenant.crmConfig}
+            hasCrm={hasCrm}
             hasSlack={hasSlack}
             onSave={handleSaveIntegrations}
             saveLabel="Save Changes"

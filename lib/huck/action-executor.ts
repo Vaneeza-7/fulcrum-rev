@@ -4,9 +4,9 @@ import { BrandEvolutionAgent } from '@/lib/huck/brand-evolution';
 import { runPipelineForTenant } from '@/lib/pipeline/orchestrator';
 import { runHealthChecks } from '@/lib/health/crm-health';
 import { CRMFactory } from '@/lib/crm/factory';
-import { decryptTenantConfig } from '@/lib/db-crypto';
 import type { CRMAuthConfig } from '@/lib/crm/types';
 import type { HuckAction } from './types';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 /**
  * Execute actions that Huck has determined need to happen.
@@ -53,7 +53,8 @@ export async function executeActions(
 
         case 'create_task': {
           const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-          const crmConfig = decryptTenantConfig(tenant.crmConfig as Record<string, string>) as CRMAuthConfig;
+          const crmConfig = decryptCrmConfig(tenant.crmConfig) as CRMAuthConfig | null;
+          if (!crmConfig) break;
           if (!tenant.crmType) break;
           const connector = CRMFactory.create(tenant.crmType, crmConfig);
           await connector.authenticate();

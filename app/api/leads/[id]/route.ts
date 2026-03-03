@@ -1,14 +1,17 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { HITLProcessor } from '@/lib/hitl/hitl-processor'
+import { NegativeReason } from '@prisma/client'
 
 const VALID_STATUSES = new Set([
-  'new',
-  'contacted',
-  'qualified',
-  'converted',
+  'discovered',
+  'pending_review',
+  'awaiting_approval',
+  'approved',
+  'pushed_to_crm',
   'rejected',
-  'nurturing',
+  'cancelled_creditzero',
 ])
 
 export async function PATCH(
@@ -16,7 +19,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { orgId } = await auth()
+    const { orgId, userId } = await auth()
     if (!orgId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -63,6 +66,16 @@ export async function PATCH(
       where: { id },
       data: updateData,
     })
+
+    if (status === 'rejected') {
+      await HITLProcessor.processRejection({
+        tenantId: tenant.id,
+        leadId: id,
+        rejectReason: NegativeReason.OTHER,
+        rejectReasonRaw: typeof rejectionReason === 'string' ? rejectionReason : undefined,
+        rejectedBy: userId ?? 'dashboard_user',
+      })
+    }
 
     return NextResponse.json({ success: true, lead: { id: updated.id, status: updated.status } })
   } catch (error) {

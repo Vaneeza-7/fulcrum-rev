@@ -1,398 +1,751 @@
 openapi: 3.1.0
 info:
   title: Fulcrum Rev API
-  version: 0.1.0
-  description: |
-    Multi-tenant B2B lead generation and revenue operations engine.
-    API-only with Slack as the primary control plane (Huck AI agent).
-
+  version: 0.2.0
+  description: Public backend contract for settings, leads, usage, billing, webhooks, and cron entrypoints.
 servers:
-  - url: https://fulcrum-rev.vercel.app
+  - url: https://revops.fulcrumcollective.io
     description: Production
   - url: http://localhost:3000
-    description: Development
-
+    description: Local development
 paths:
-  /api/health:
+  /api/leads:
     get:
-      summary: System health check
-      description: Returns database connectivity, pipeline freshness, and tenant summary.
-      tags: [Health]
+      tags: [Leads]
+      summary: List tenant leads
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: grade
+          schema:
+            type: string
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
-        "200":
-          description: System is healthy or degraded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthResponse"
-        "503":
-          description: System is unhealthy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthResponse"
-
-  /api/webhooks/clerk:
-    post:
-      summary: Clerk organization webhook
-      description: Creates/updates/deactivates tenants when Clerk organizations change.
-      tags: [Webhooks]
-      security:
-        - clerkWebhook: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                type:
-                  type: string
-                  enum: [organization.created, organization.updated, organization.deleted]
-                data:
-                  type: object
-      responses:
-        "200":
-          description: Webhook received
-        "401":
-          description: Missing webhook signature
-
-  /api/webhooks/apify:
-    post:
-      summary: Apify actor run webhook
-      description: Receives notifications when Apify scraping actors complete.
-      tags: [Webhooks]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                eventType:
-                  type: string
-                resource:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    status:
-                      type: string
-      responses:
-        "200":
-          description: Webhook received
-
-  /api/slack/events:
-    post:
-      summary: Slack Events API
-      description: |
-        Primary entry point for the Huck AI agent.
-        Handles app_mention and direct message events.
-        Supports URL verification challenge.
-      tags: [Slack]
-      security:
-        - slackSignature: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Event acknowledged
-
-  /api/slack/commands:
-    post:
-      summary: Slack slash commands
-      description: |
-        Handles `/fulcrum` slash commands:
-        - `status` — Pipeline stats, grade distribution, stalled deals
-        - `run` — Trigger pipeline manually
-        - `deals` — List stalled deals
-      tags: [Slack]
-      security:
-        - slackSignature: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                command:
-                  type: string
-                text:
-                  type: string
-                team_id:
-                  type: string
-      responses:
-        "200":
-          description: Command response (Slack block payload)
-
-  /api/slack/interactions:
-    post:
-      summary: Slack interactive components
-      description: |
-        Handles button clicks from Slack messages:
-        - `push_all_aplus` — Push all A+ leads to CRM
-        - `review_leads` — Post individual lead cards for review
-        - `approve_lead` — Approve and push a single lead
-        - `reject_lead` — Reject a single lead
-        - `reject_grade` — Bulk-reject leads by grade
-      tags: [Slack]
-      security:
-        - slackSignature: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                payload:
-                  type: string
-                  description: JSON-encoded Slack interaction payload
-      responses:
-        "200":
-          description: Interaction response
-
-  /api/cron/pipeline:
-    post:
-      summary: Daily lead generation pipeline
-      description: Scrape → Enrich → Score → Notify for all active tenants.
-      tags: [Cron]
-      security:
-        - cronSecret: []
-      responses:
-        "200":
-          description: Pipeline results
+        '200':
+          description: Paginated lead list
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  tenants_processed:
+                  page:
                     type: integer
-                  results:
+                  pageSize:
+                    type: integer
+                  total:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  filters:
+                    type: object
+                  leads:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/usage/summary:
+    get:
+      tags: [Usage]
+      summary: Get usage and ROI summary
+      responses:
+        '200':
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/usage/history:
+    get:
+      tags: [Usage]
+      summary: Get tenant activity history
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Audit history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  history:
                     type: array
                     items:
                       type: object
-                  errors:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/search-queries:
+    get:
+      tags: [Settings]
+      summary: Get tenant search queries
+      responses:
+        '200':
+          description: Search query list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queries:
                     type: array
                     items:
+                      $ref: '#/components/schemas/SearchQuery'
+    put:
+      tags: [Settings]
+      summary: Replace tenant search queries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                queries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SearchQueryInput'
+      responses:
+        '200':
+          description: Search queries replaced
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/intent-keywords:
+    get:
+      tags: [Settings]
+      summary: Get tenant intent keywords
+      responses:
+        '200':
+          description: Intent keyword list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keywords:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IntentKeyword'
+    put:
+      tags: [Settings]
+      summary: Replace tenant intent keywords
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keywords:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/IntentKeywordInput'
+      responses:
+        '200':
+          description: Intent keywords replaced
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/scoring:
+    get:
+      tags: [Settings]
+      summary: Get tenant scoring config
+      responses:
+        '200':
+          description: Scoring config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scoringConfig:
+                    $ref: '#/components/schemas/ScoringConfig'
+    put:
+      tags: [Settings]
+      summary: Upsert tenant scoring config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scoringConfig:
+                  $ref: '#/components/schemas/ScoringConfig'
+      responses:
+        '200':
+          description: Scoring config saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/crm:
+    get:
+      tags: [Settings]
+      summary: Get tenant CRM settings
+      responses:
+        '200':
+          description: CRM configuration metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  crm:
+                    $ref: '#/components/schemas/CrmSettings'
+    put:
+      tags: [Settings]
+      summary: Save tenant CRM settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                crmType:
+                  type: string
+                  enum: [zoho, hubspot, salesforce]
+                crmConfig:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '200':
+          description: CRM settings saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/slack:
+    get:
+      tags: [Settings]
+      summary: Get tenant Slack settings
+      responses:
+        '200':
+          description: Slack configuration metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slack:
+                    $ref: '#/components/schemas/SlackSettings'
+    put:
+      tags: [Settings]
+      summary: Save tenant Slack settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slack:
+                  type: object
+                  properties:
+                    teamId:
                       type: string
-        "401":
-          description: Unauthorized
-
+                    channelId:
+                      type: string
+                    botToken:
+                      type: string
+      responses:
+        '200':
+          description: Slack settings saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/api-keys:
+    get:
+      tags: [Settings]
+      summary: Get tenant BYO key status
+      responses:
+        '200':
+          description: Provider key metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeysSettings'
+    put:
+      tags: [Settings]
+      summary: Save tenant BYO keys and provider preference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                primaryLeadProvider:
+                  type: string
+                  enum: [instantly, apify]
+                instantly:
+                  type: object
+                  properties:
+                    apiKey:
+                      type: string
+                    workspaceId:
+                      type: string
+                apifyApiToken:
+                  type: string
+                  nullable: true
+                anthropicApiKey:
+                  type: string
+                  nullable: true
+                clear:
+                  type: array
+                  items:
+                    type: string
+                    enum: [instantly, apify, anthropic]
+      responses:
+        '200':
+          description: Provider keys saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/billing/summary:
+    get:
+      tags: [Billing]
+      summary: Get billing and credit summary
+      responses:
+        '200':
+          description: Billing summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  billing:
+                    $ref: '#/components/schemas/BillingSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Create Stripe Checkout session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planSlug:
+                  type: string
+                  enum: [starter, growth, scale]
+      responses:
+        '200':
+          description: Checkout session URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/billing/portal:
+    post:
+      tags: [Billing]
+      summary: Create Stripe Billing Portal session
+      responses:
+        '200':
+          description: Billing portal URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No Stripe customer for this tenant
+  /api/webhooks/stripe:
+    post:
+      tags: [Webhooks]
+      summary: Receive Stripe webhook events
+      responses:
+        '200':
+          description: Webhook received
+        '400':
+          description: Invalid signature or payload
+  /api/cron/pipeline:
+    post:
+      tags: [Cron]
+      summary: Run the primary pipeline
+      responses:
+        '200':
+          description: Job result
+  /api/cron/roi-sync:
+    post:
+      tags: [Cron]
+      summary: Sync CRM deal values into ROI attribution
+      responses:
+        '200':
+          description: Job result
+  /api/cron/hitl-recalibrate:
+    post:
+      tags: [Cron]
+      summary: Run HITL recalibration
+      responses:
+        '200':
+          description: Job result
+  /api/cron/cold-start-check:
+    post:
+      tags: [Cron]
+      summary: Evaluate cold-start windows
+      responses:
+        '200':
+          description: Job result
+  /api/cron/email-digest:
+    post:
+      tags: [Cron]
+      summary: Send email digest
+      responses:
+        '200':
+          description: Job result
   /api/cron/diagnostics:
     post:
-      summary: Deal diagnostics
-      description: Check CRM deals for stalled status, generate re-engagement actions.
       tags: [Cron]
-      security:
-        - cronSecret: []
+      summary: Run deal diagnostics
       responses:
-        "200":
-          description: Diagnostics results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/icm:
-    get:
-      summary: ICM reconciliation
-      description: |
-        Triple-match reconciliation (CRM → Invoice → Payment) for commission tracking.
-        Optionally filter by tenantId query parameter.
+    post:
       tags: [Cron]
-      security:
-        - cronSecret: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
+      summary: Run ICM reconciliation
       responses:
-        "200":
-          description: Reconciliation results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/health:
     post:
-      summary: Health checks with Huck alerts
-      description: |
-        Run CRM connectivity, data freshness, and pipeline health checks.
-        Sends Huck system alerts for critical/degraded states.
       tags: [Cron]
-      security:
-        - cronSecret: []
+      summary: Run tenant health checks
       responses:
-        "200":
-          description: Health check results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/weekly-digest:
     post:
-      summary: Weekly performance digest
-      description: Send Huck's weekly digest to all active tenants via Slack.
       tags: [Cron]
-      security:
-        - cronSecret: []
+      summary: Send weekly Slack digest
       responses:
-        "200":
-          description: Digest sent
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/seo:
-    get:
-      summary: SEO audit
-      description: |
-        Weekly SEO position tracking, drop detection, cannibalization analysis.
-        Optionally filter by tenantId query parameter.
+    post:
       tags: [Cron]
-      security:
-        - cronSecret: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
+      summary: Run SEO audits
       responses:
-        "200":
-          description: SEO audit results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/cro:
-    get:
-      summary: CRO audit
-      description: |
-        Bi-weekly Conversion Rate Optimization audit.
-        Page-level analysis, funnel leakage detection, A/B test hypothesis generation.
-        Optionally filter by tenantId query parameter.
+    post:
       tags: [Cron]
-      security:
-        - cronSecret: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
+      summary: Run CRO audits
       responses:
-        "200":
-          description: CRO audit results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/content-allocation:
     post:
-      summary: Monthly content allocation
-      description: Calculate profitability scores, detect saturation, allocate content slots.
       tags: [Cron]
-      security:
-        - cronSecret: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
+      summary: Allocate content slots
       responses:
-        "200":
-          description: Content allocation results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/content-roi:
     post:
-      summary: Monthly content ROI analysis
-      description: |
-        Update content attribution, generate ROI report, auto-kill underperformers (EVS < 20).
       tags: [Cron]
-      security:
-        - cronSecret: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
+      summary: Compute content ROI summaries
       responses:
-        "200":
-          description: Content ROI results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
   /api/cron/persona-deployment:
     post:
-      summary: Daily persona snippet deployment
-      description: Check for persona snippets ready to deploy and post to Slack.
       tags: [Cron]
-      security:
-        - cronSecret: []
+      summary: Deploy queued persona snippets
       responses:
-        "200":
-          description: Deployment results
-        "401":
-          description: Unauthorized
-
+        '200':
+          description: Job result
+  /api/cron/billing-sync:
+    post:
+      tags: [Cron]
+      summary: Sync metered overage to Stripe
+      responses:
+        '200':
+          description: Job result
 components:
+  responses:
+    Unauthorized:
+      description: Missing or invalid tenant auth context
+    BadRequest:
+      description: Invalid request body or query parameters
   schemas:
-    HealthResponse:
+    Lead:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        title:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+        linkedinUrl:
+          type: string
+        fulcrumScore:
+          type: number
+        fulcrumGrade:
+          type: string
+          nullable: true
+        fitScore:
+          type: number
+        intentScore:
+          type: number
         status:
           type: string
-          enum: [ok, degraded, unhealthy]
-        timestamp:
+        discoveredAt:
           type: string
           format: date-time
-        checks:
-          type: object
+    SearchQuery:
+      allOf:
+        - $ref: '#/components/schemas/SearchQueryInput'
+        - type: object
           properties:
-            database:
-              $ref: "#/components/schemas/HealthCheck"
-            pipeline:
-              $ref: "#/components/schemas/HealthCheck"
-            tenants:
-              $ref: "#/components/schemas/HealthCheck"
-
-    HealthCheck:
+            id:
+              type: string
+              format: uuid
+    SearchQueryInput:
       type: object
       properties:
-        status:
+        queryName:
           type: string
-          enum: [ok, degraded, unhealthy]
-        detail:
+        searchQuery:
+          type: object
+          properties:
+            keywords:
+              type: string
+            industry:
+              type: string
+            companySize:
+              type: string
+            additionalKeywords:
+              type: string
+        maxResults:
+          type: integer
+        isActive:
+          type: boolean
+    IntentKeyword:
+      allOf:
+        - $ref: '#/components/schemas/IntentKeywordInput'
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+    IntentKeywordInput:
+      type: object
+      properties:
+        keyword:
           type: string
-        latencyMs:
+        intentScore:
           type: number
-
-  securitySchemes:
-    cronSecret:
-      type: http
-      scheme: bearer
-      description: CRON_SECRET token via Authorization Bearer header
-    slackSignature:
-      type: apiKey
-      in: header
-      name: x-slack-signature
-      description: Slack request signature (HMAC-SHA256)
-    clerkWebhook:
-      type: apiKey
-      in: header
-      name: svix-id
-      description: Clerk/Svix webhook signature
+        category:
+          type: string
+        isActive:
+          type: boolean
+    ScoringConfig:
+      type: object
+      properties:
+        company_size:
+          type: array
+          items:
+            type: object
+            properties:
+              min:
+                type: number
+              max:
+                type: number
+              points:
+                type: number
+        industry_fit:
+          type: array
+          items:
+            type: object
+            properties:
+              match:
+                type: string
+              points:
+                type: number
+        role_authority:
+          type: array
+          items:
+            type: object
+            properties:
+              pattern:
+                type: string
+              points:
+                type: number
+        revenue_signals:
+          type: array
+          items:
+            type: object
+            properties:
+              signal:
+                type: string
+              points:
+                type: number
+    CrmSettings:
+      type: object
+      properties:
+        crmType:
+          type: string
+          nullable: true
+        connected:
+          type: boolean
+        maskedConfig:
+          type: object
+          additionalProperties:
+            type: string
+        hasTenantConfig:
+          type: boolean
+        lastPushAt:
+          type: string
+          format: date-time
+          nullable: true
+        customViewUrl:
+          type: string
+          nullable: true
+    SlackSettings:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        teamId:
+          type: string
+          nullable: true
+        channelId:
+          type: string
+          nullable: true
+        installedAt:
+          type: string
+          format: date-time
+          nullable: true
+        hasBotToken:
+          type: boolean
+    ApiKeysSettings:
+      type: object
+      properties:
+        primaryLeadProvider:
+          type: string
+          enum: [instantly, apify]
+        providers:
+          type: object
+          properties:
+            instantly:
+              type: object
+              properties:
+                usingTenantKey:
+                  type: boolean
+                workspaceId:
+                  type: string
+                  nullable: true
+                hasPlatformFallback:
+                  type: boolean
+            apify:
+              type: object
+              properties:
+                usingTenantKey:
+                  type: boolean
+                hasPlatformFallback:
+                  type: boolean
+            anthropic:
+              type: object
+              properties:
+                usingTenantKey:
+                  type: boolean
+                hasPlatformFallback:
+                  type: boolean
+    BillingSummary:
+      type: object
+      properties:
+        planSlug:
+          type: string
+          nullable: true
+        subscriptionStatus:
+          type: string
+        currentPeriodStart:
+          type: string
+          format: date-time
+          nullable: true
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        includedCredits:
+          type: number
+        usedCredits:
+          type: number
+        remainingIncludedCredits:
+          type: number
+        overageCredits:
+          type: number
+        projectedOverageUsdCents:
+          type: integer

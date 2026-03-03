@@ -2,6 +2,7 @@ import { WebClient } from '@slack/web-api';
 import { prisma } from '@/lib/db';
 import { buildPipelineSummaryBlocks, buildLeadReviewBlocks, buildDealAlertBlocks } from './blocks';
 import { SlackLeadCard, SlackPipelineSummary, SlackDealAlert } from './types';
+import { decryptSlackBotToken } from '@/lib/settings/slack';
 
 /**
  * Get a Slack WebClient for a specific tenant.
@@ -13,9 +14,11 @@ export async function getSlackClient(tenantId: string): Promise<{ client: WebCli
   });
 
   if (!config) return null;
+  const botToken = decryptSlackBotToken(config.botToken);
+  if (!botToken) return null;
 
   return {
-    client: new WebClient(config.botToken),
+    client: new WebClient(botToken),
     channelId: config.channelId,
   };
 }

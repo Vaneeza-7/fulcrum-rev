@@ -1,7 +1,7 @@
 import { prisma, auditLog } from '@/lib/db';
 import { CRMFactory } from '@/lib/crm/factory';
-import { CRMAuthConfig } from '@/lib/crm/types';
 import { jobLogger } from '@/lib/logger';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 const log = jobLogger('crm_push');
 const MAX_RETRIES = 3;
@@ -19,7 +19,12 @@ export async function pushLeadToCRM(leadId: string): Promise<{ success: boolean;
   if (!lead.tenant.crmType) {
     return { success: false, error: 'No CRM configured for this tenant' };
   }
-  const crm = CRMFactory.create(lead.tenant.crmType, lead.tenant.crmConfig as CRMAuthConfig);
+  const crmConfig = decryptCrmConfig(lead.tenant.crmConfig);
+  if (!crmConfig) {
+    return { success: false, error: 'CRM config missing or unreadable' };
+  }
+
+  const crm = CRMFactory.create(lead.tenant.crmType, crmConfig);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {

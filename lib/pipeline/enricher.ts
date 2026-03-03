@@ -1,4 +1,4 @@
-import { askClaudeJson } from '@/lib/ai/claude';
+import { askClaudeJsonWithUsage, type ClaudeCallResult } from '@/lib/ai/claude';
 import { researchCompany } from '@/lib/ai/perplexity';
 import { ENRICHMENT_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { EnrichmentResult } from '@/lib/ai/types';
@@ -11,8 +11,17 @@ import { LinkedInProfile } from './types';
  * Step 2: Claude analyzes the combined data and produces structured enrichment
  */
 export async function enrichProfile(
-  profile: LinkedInProfile
+  profile: LinkedInProfile,
+  options?: { anthropicApiKey?: string },
 ): Promise<EnrichmentResult> {
+  const result = await enrichProfileWithUsage(profile, options)
+  return result.enrichment
+}
+
+export async function enrichProfileWithUsage(
+  profile: LinkedInProfile,
+  options?: { anthropicApiKey?: string },
+): Promise<{ enrichment: EnrichmentResult; usage: ClaudeCallResult['usage']; model: string }> {
   const company = profile.company ?? 'Unknown Company';
   const name = profile.full_name;
   const title = profile.title ?? '';
@@ -47,28 +56,39 @@ Recent News: ${perplexityData.recentNews}
 `;
 
   try {
-    const enrichment = await askClaudeJson<EnrichmentResult>(
+    const enrichment = await askClaudeJsonWithUsage<EnrichmentResult>(
       ENRICHMENT_SYSTEM_PROMPT,
       userMessage,
-      { maxTokens: 1500 }
+      { maxTokens: 1500, apiKey: options?.anthropicApiKey }
     );
-    return enrichment;
+    return {
+      enrichment: enrichment.data,
+      usage: enrichment.usage,
+      model: enrichment.model,
+    };
   } catch (error) {
     console.error(`Claude enrichment failed for ${name}:`, error);
     return {
-      company_size_estimate: 0,
-      industry: 'Unknown',
-      industry_subcategory: 'Unknown',
-      funding_stage: null,
-      funding_amount: null,
-      tech_stack: [],
-      pain_points: [],
-      buying_signals: [],
-      recent_events: [],
-      decision_maker_level: 'ic',
-      budget_timing: null,
-      competitor_mentions: [],
-      confidence_score: 0,
+      enrichment: {
+        company_size_estimate: 0,
+        industry: 'Unknown',
+        industry_subcategory: 'Unknown',
+        funding_stage: null,
+        funding_amount: null,
+        tech_stack: [],
+        pain_points: [],
+        buying_signals: [],
+        recent_events: [],
+        decision_maker_level: 'ic',
+        budget_timing: null,
+        competitor_mentions: [],
+        confidence_score: 0,
+      },
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+      },
+      model: 'fallback',
     };
   }
 }

@@ -4,6 +4,7 @@ import { verifyCronAuth } from '@/lib/cron/verify-auth';
 import { ROIAttributionService } from '@/lib/roi/attribution-service';
 import { CRMFactory } from '@/lib/crm/factory';
 import { jobLogger } from '@/lib/logger';
+import { decryptCrmConfig } from '@/lib/settings/crm';
 
 const log = jobLogger('roi-sync');
 
@@ -23,7 +24,14 @@ export async function POST(request: NextRequest) {
     try {
       if (!tenant.crmType || !tenant.crmConfig) continue;
 
-      const crmConnector = CRMFactory.create(tenant.crmType, tenant.crmConfig as any);
+      const crmConfig = decryptCrmConfig(tenant.crmConfig);
+      if (!crmConfig) {
+        errors++;
+        log.error({ tenantId: tenant.id }, 'CRM config missing or unreadable');
+        continue;
+      }
+
+      const crmConnector = CRMFactory.create(tenant.crmType, crmConfig);
       await crmConnector.authenticate();
 
       const sourceTags = await prisma.fulcrumSourceTag.findMany({
