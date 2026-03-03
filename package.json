@@ -2,6 +2,7 @@
   "name": "fulcrum-rev",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -12,6 +13,10 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "billing:seed-provider-pricing": "npx tsx scripts/billing/seed-provider-pricing.ts",
+    "billing:assign-plan": "npx tsx scripts/billing/assign-plan.ts",
+    "billing:list-tenants": "npx tsx scripts/billing/list-tenants.ts",
+    "billing:update-provider-price": "npx tsx scripts/billing/update-provider-price.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

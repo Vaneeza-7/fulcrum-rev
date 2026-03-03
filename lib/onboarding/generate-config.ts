@@ -1,4 +1,4 @@
-import { askClaudeJson } from '@/lib/ai/claude'
+import { askClaudeJson, type ClaudeRequestOptions } from '@/lib/ai/claude'
 
 export interface ICPContext {
   companyName: string
@@ -108,7 +108,10 @@ Rules:
 4. Make keywords specific to the company's market, NOT generic. Reference actual pain points, tools, and industry terms.
 5. Use competitor names in intent keywords where relevant (e.g., "switching from [competitor]").`
 
-export async function generateConfig(context: ICPContext): Promise<GeneratedConfig> {
+export async function generateConfig(
+  context: ICPContext,
+  options?: Pick<ClaudeRequestOptions, 'apiKey' | 'billingContext'>,
+): Promise<GeneratedConfig> {
   const userMessage = `
 ## Company Profile
 - Name: ${context.companyName}
@@ -141,5 +144,7 @@ Generate a lead research configuration optimized for finding prospects who are m
 
   return askClaudeJson<GeneratedConfig>(SYSTEM_PROMPT, userMessage, {
     maxTokens: 4096,
+    apiKey: options?.apiKey,
+    billingContext: options?.billingContext,
   })
 }

@@ -1,19 +1,43 @@
-import { askClaudeJson } from '@/lib/ai/claude';
-import { SIGNAL_DETECTION_SYSTEM_PROMPT } from '@/lib/ai/prompts';
-import { DetectedSignal, EnrichmentResult } from '@/lib/ai/types';
-import { getTimeDecayMultiplier } from './types';
+import { askClaudeJsonWithUsage } from '@/lib/ai/claude'
+import { SIGNAL_DETECTION_SYSTEM_PROMPT } from '@/lib/ai/prompts'
+import { DetectedSignal, EnrichmentResult } from '@/lib/ai/types'
+import { getTimeDecayMultiplier } from './types'
 
-/**
- * Detect intent signals from enrichment data using Claude.
- * Returns raw signals with time-decayed scores.
- */
+function normalizeSignals(signals: DetectedSignal[]) {
+  return signals
+    .filter(
+      (signal) =>
+        typeof signal.signal_score === 'number' &&
+        isFinite(signal.signal_score) &&
+        typeof signal.days_ago === 'number' &&
+        isFinite(signal.days_ago),
+    )
+    .map((signal) => ({
+      ...signal,
+      signal_score:
+        Math.max(0, Math.min(signal.signal_score, 15)) *
+        getTimeDecayMultiplier(Math.max(0, signal.days_ago)),
+      days_ago: Math.max(0, signal.days_ago),
+    }))
+}
+
 export async function detectSignals(
   enrichment: EnrichmentResult,
-  tenantKeywords: Array<{ keyword: string; intentScore: number }>
+  tenantKeywords: Array<{ keyword: string; intentScore: number }>,
+  options?: { anthropicApiKey?: string },
 ): Promise<DetectedSignal[]> {
+  const result = await detectSignalsWithUsage(enrichment, tenantKeywords, options)
+  return result.signals
+}
+
+export async function detectSignalsWithUsage(
+  enrichment: EnrichmentResult,
+  tenantKeywords: Array<{ keyword: string; intentScore: number }>,
+  options?: { anthropicApiKey?: string },
+): Promise<{ signals: DetectedSignal[]; usage: { inputTokens: number; outputTokens: number }; model: string }> {
   const keywordContext = tenantKeywords
     .map((k) => `- "${k.keyword}" (intent score: ${k.intentScore}/10)`)
-    .join('\n');
+    .join('\n')
 
   const userMessage = `
 Enrichment Data:
@@ -33,39 +57,31 @@ Analyze this enrichment data and detect any intent signals. Check for:
 8. High content engagement (time-on-page on service content)
 9. Partial form submissions (started form but didn't complete)
 10. Multi-page sessions (visited 3+ pages in single session)
-`;
+`
 
   try {
-    const signals = await askClaudeJson<DetectedSignal[]>(
+    const result = await askClaudeJsonWithUsage<DetectedSignal[]>(
       SIGNAL_DETECTION_SYSTEM_PROMPT,
       userMessage,
-      { maxTokens: 1500 }
-    );
+      { maxTokens: 1500, apiKey: options?.anthropicApiKey },
+    )
 
-    // Validate and apply time decay to each signal
-    return signals
-      .filter((signal) =>
-        typeof signal.signal_score === 'number' &&
-        isFinite(signal.signal_score) &&
-        typeof signal.days_ago === 'number' &&
-        isFinite(signal.days_ago)
-      )
-      .map((signal) => ({
-        ...signal,
-        signal_score: Math.max(0, Math.min(signal.signal_score, 15)) * getTimeDecayMultiplier(Math.max(0, signal.days_ago)),
-        days_ago: Math.max(0, signal.days_ago),
-      }));
+    return {
+      signals: normalizeSignals(result.data),
+      usage: result.usage,
+      model: result.model,
+    }
   } catch (error) {
-    console.error('Signal detection failed:', error);
-    return [];
+    console.error('Signal detection failed:', error)
+    return {
+      signals: [],
+      usage: { inputTokens: 0, outputTokens: 0 },
+      model: 'fallback',
+    }
   }
 }
 
-/**
- * Calculate total intent score from detected signals.
- * Capped at 60 points as per the Fulcrum formula.
- */
 export function calculateIntentScore(signals: DetectedSignal[]): number {
-  const totalRaw = signals.reduce((sum, s) => sum + s.signal_score, 0);
-  return Math.min(totalRaw, 60); // Cap at 60
+  const totalRaw = signals.reduce((sum, s) => sum + s.signal_score, 0)
+  return Math.min(totalRaw, 60)
 }

@@ -1,39 +1,22 @@
-import { describe, expect, it } from 'vitest'
-import {
-  getDiscoveryUsageCharge,
-  getEnrichmentUsageCharge,
-  getFirstLineUsageCharge,
-} from '@/lib/billing/credit-rules'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+beforeEach(() => {
+  process.env.DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://test:test@localhost:5432/test'
+  delete process.env.BILLING_TARGET_MARKUP_MULTIPLIER
+  vi.resetModules()
+})
 
 describe('billing credit rules', () => {
-  it('maps discovery credits directly to normalized provider cost cents', () => {
-    expect(getDiscoveryUsageCharge()).toEqual({
-      credits: 25,
-      usdAmountCents: 25,
-    })
+  it('converts provider cost micros into decimal credits', async () => {
+    const { creditsFromProviderCostUsdMicros, formatCredits } = await import('@/lib/billing/credit-rules')
+
+    expect(formatCredits(creditsFromProviderCostUsdMicros(1_000))).toBe('1.000')
+    expect(formatCredits(creditsFromProviderCostUsdMicros(15_320))).toBe('15.320')
   })
 
-  it('maps enrichment credits directly to normalized provider cost cents', () => {
-    const charge = getEnrichmentUsageCharge({
-      inputTokens: 1000,
-      outputTokens: 500,
-    })
+  it('applies a global 3x markup to billable spend', async () => {
+    const { billableUsdMicrosFromProviderCost, formatUsdMicros } = await import('@/lib/billing/credit-rules')
 
-    expect(charge).toEqual({
-      credits: 7,
-      usdAmountCents: 7,
-    })
-  })
-
-  it('maps first-line credits directly to normalized provider cost cents', () => {
-    const charge = getFirstLineUsageCharge({
-      inputTokens: 250,
-      outputTokens: 120,
-    })
-
-    expect(charge).toEqual({
-      credits: 1,
-      usdAmountCents: 1,
-    })
+    expect(formatUsdMicros(billableUsdMicrosFromProviderCost(15_320))).toBe('0.045960')
   })
 })

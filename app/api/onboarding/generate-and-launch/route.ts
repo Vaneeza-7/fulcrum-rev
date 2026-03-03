@@ -5,6 +5,7 @@ import { generateConfig } from '@/lib/onboarding/generate-config'
 import type { ICPContext } from '@/lib/onboarding/generate-config'
 import { initializeColdStart } from '@/lib/cold-start'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys'
 
 const SCORING_CONFIG_TYPES = [
   'company_size',
@@ -76,12 +77,24 @@ export async function POST() {
       whyChooseUs: profile.whyChooseUs,
     }
 
+    const anthropicCredentials = resolveAnthropicCredentials({
+      anthropicApiKey: tenant.anthropicApiKey,
+    })
+
     // Generate config via AI with timeout
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 55_000) // 55s (under Vercel 60s limit)
     let generated
     try {
-      generated = await generateConfig(context)
+      generated = await generateConfig(context, {
+        apiKey: anthropicCredentials.apiKey ?? undefined,
+        billingContext: {
+          tenantId: tenant.id,
+          provider: 'anthropic',
+          feature: 'onboarding',
+          stage: 'onboarding.generate_config',
+        },
+      })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         return NextResponse.json({ error: 'AI config generation timed out. Please try again.' }, { status: 504 })

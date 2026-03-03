@@ -1,16 +1,17 @@
-// app/(dashboard)/usage/page.tsx
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { ROIAttributionService } from '@/lib/roi/attribution-service'
 import { getROIAttribution } from '@/lib/roi/attribution-tagger'
 import { ROIAttributionTag } from '@/components/roi/ROIAttributionTag'
+import { getTenantBillingSummary } from '@/lib/billing/summary'
+import { getTenantBillingHistory } from '@/lib/billing/history'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'Fulcrum — Usage & ROI',
-  description: 'Pipeline usage and Shadow ROI tracking',
+  description: 'Pipeline usage, exact credit billing, and Shadow ROI tracking',
 }
 
 export default async function UsagePage() {
@@ -28,8 +29,7 @@ export default async function UsagePage() {
   })
   if (!tenant) redirect('/step-1')
 
-  // Fetch ROI summary and top leads
-  const [roiSummary, topROILeads, totalLeads, pushedToCrm, pipelineRuns] = await Promise.all([
+  const [roiSummary, topROILeads, totalLeads, pushedToCrm, pipelineRuns, billingSummary, billingHistory] = await Promise.all([
     ROIAttributionService.getTenantROISummary(tenant.id),
     ROIAttributionService.getTopROILeads(tenant.id, 10),
     prisma.lead.count({ where: { tenantId: tenant.id } }),
@@ -37,32 +37,30 @@ export default async function UsagePage() {
     prisma.auditLog.count({
       where: { tenantId: tenant.id, actionType: 'pipeline_completed' },
     }),
+    getTenantBillingSummary(tenant.id),
+    getTenantBillingHistory(tenant.id, { page: 1, pageSize: 25, billableOnly: false }),
   ])
 
-  // Get attribution label for all ROI leads
-  const roiLeadIds = topROILeads.map((l) => l.leadId)
-  // Pass null for crmAdapter — shows ESTIMATED until CRM adapter is wired
-  const attribution = await getROIAttribution(roiLeadIds, null)
+  const attribution = await getROIAttribution(topROILeads.map((lead) => lead.leadId), null)
+  const billing = billingSummary.billing
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        {/* Header */}
-        <h1 className="text-2xl font-bold mb-1">Usage & ROI</h1>
-        <p className="text-sm text-gray-400 mb-8">
-          Pipeline consumption and Shadow ROI tracking for {tenant.name}
+        <h1 className="mb-1 text-2xl font-bold">Usage & ROI</h1>
+        <p className="mb-8 text-sm text-gray-400">
+          Pipeline consumption, exact credit billing, and Shadow ROI tracking for {tenant.name}
         </p>
 
-        {/* Shadow ROI Hero Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <ShadowROICard
             label="Attributed Revenue"
             value={`$${roiSummary.totalRevenue.toLocaleString()}`}
             attribution={attribution}
           />
           <ShadowROICard
-            label="Credit Spend"
-            value={`$${roiSummary.totalSpend.toLocaleString()}`}
+            label="Provider Cost Spend"
+            value={`$${roiSummary.totalSpend.toFixed(2)}`}
             attribution={attribution}
           />
           <ShadowROICard
@@ -79,30 +77,140 @@ export default async function UsagePage() {
           />
         </div>
 
-        {/* Pipeline Usage Stats */}
-        <div className="rounded-xl bg-gray-900 border border-gray-800 p-5 mb-8">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+        <div className="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
             Pipeline Usage
           </h2>
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <div className="text-2xl font-bold text-white">{totalLeads}</div>
-              <div className="text-xs text-gray-500">Total Leads Processed</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-white">{pushedToCrm}</div>
-              <div className="text-xs text-gray-500">Pushed to CRM</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-white">{pipelineRuns}</div>
-              <div className="text-xs text-gray-500">Pipeline Runs</div>
-            </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <StatBlock label="Total Leads Processed" value={String(totalLeads)} />
+            <StatBlock label="Pushed to CRM" value={String(pushedToCrm)} />
+            <StatBlock label="Pipeline Runs" value={String(pipelineRuns)} />
           </div>
         </div>
 
-        {/* Top ROI Leads */}
-        <div className="rounded-xl bg-gray-900 border border-gray-800 p-5">
-          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">
+        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <section className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+            <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+              Fulcrum Credits
+            </h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <StatBlock label="Plan" value={billing.planSlug ?? 'unassigned'} />
+              <StatBlock label="Billing Source" value={billing.billingSource} />
+              <StatBlock label="Included" value={billing.includedCredits} />
+              <StatBlock label="Used" value={billing.usedCredits} />
+              <StatBlock label="Remaining" value={billing.remainingCredits} />
+              <StatBlock label="Status" value={billing.subscriptionStatus} />
+              <StatBlock label="Credit Unit" value={`$${billing.creditUnitUsd}`} />
+              <StatBlock label="Current Period" value={`${billing.currentPeriodStart ? new Date(billing.currentPeriodStart).toLocaleDateString() : 'N/A'} - ${billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : 'N/A'}`} />
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+            <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+              Projected Billing
+            </h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <StatBlock label="Projected Billable" value={`$${Number(billing.projectedBillableUsd).toFixed(2)}`} />
+              <StatBlock label="Metered Providers" value={String(billing.providerBreakdown.length)} />
+              <StatBlock label="Unpriced Activity" value={String(billing.unpricedActivity.length)} />
+            </div>
+            {billing.unpricedActivity.length > 0 ? (
+              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Some provider activity is tracked operationally but is not yet part of exact credit billing.
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        <section className="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+            Provider Activity
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-gray-500">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Provider</th>
+                  <th className="pb-3 pr-4 font-medium">Stage</th>
+                  <th className="pb-3 pr-4 font-medium">Requests</th>
+                  <th className="pb-3 pr-4 font-medium">Credits</th>
+                  <th className="pb-3 font-medium">Projected Billable</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {billing.providerBreakdown.length > 0 ? billing.providerBreakdown.map((entry) => (
+                  <tr key={`${entry.provider}:${entry.stage}`}>
+                    <td className="py-3 pr-4 capitalize text-white">{entry.provider}</td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.stage}</td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.requestCount}</td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.credits}</td>
+                    <td className="py-3 text-gray-300">${Number(entry.projectedBillableUsd).toFixed(2)}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="py-4 text-gray-500">
+                      No exact-cost provider usage recorded for this period yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {billing.unpricedActivity.length > 0 ? (
+            <div className="mt-4 space-y-2 text-sm text-gray-400">
+              {billing.unpricedActivity.map((entry) => (
+                <div key={`${entry.provider}:${entry.stage}`}>
+                  {entry.provider} / {entry.stage}: {entry.activityCount} activities ({entry.reason})
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+            Billing History
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-gray-500">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Timestamp</th>
+                  <th className="pb-3 pr-4 font-medium">Provider</th>
+                  <th className="pb-3 pr-4 font-medium">Stage</th>
+                  <th className="pb-3 pr-4 font-medium">Context</th>
+                  <th className="pb-3 pr-4 font-medium">Usage</th>
+                  <th className="pb-3 pr-4 font-medium">Credits</th>
+                  <th className="pb-3 font-medium">Projected Billable</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {billingHistory.entries.length > 0 ? billingHistory.entries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="py-3 pr-4 text-gray-300">{new Date(entry.createdAt).toLocaleString()}</td>
+                    <td className="py-3 pr-4 capitalize text-white">{entry.provider}</td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.stage}</td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.leadName ?? entry.leadId ?? 'Job-level event'}</td>
+                    <td className="py-3 pr-4 text-gray-300">
+                      {entry.usage.requestCount} req / {entry.usage.inputTokens} in / {entry.usage.outputTokens} out
+                    </td>
+                    <td className="py-3 pr-4 text-gray-300">{entry.credits}</td>
+                    <td className="py-3 text-gray-300">${Number(entry.projectedBillableUsd).toFixed(4)}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-gray-500">
+                      No billing history recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
             Top ROI Leads
           </h2>
           {topROILeads.length > 0 ? (
@@ -110,10 +218,10 @@ export default async function UsagePage() {
               {topROILeads.map((lead) => (
                 <div
                   key={lead.id}
-                  className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0"
+                  className="flex items-center justify-between border-b border-gray-800 py-2 last:border-0"
                 >
                   <div>
-                    <p className="text-xs text-gray-500 font-mono">
+                    <p className="font-mono text-xs text-gray-500">
                       {lead.sourceTag.sourceType.replace(/_/g, ' ')}
                     </p>
                   </div>
@@ -126,12 +234,10 @@ export default async function UsagePage() {
                         className="ml-1 align-middle"
                       />
                     </span>
-                    <span className="text-xs text-brand-cyan font-semibold">
+                    <span className="text-xs font-semibold text-brand-cyan">
                       {lead.roiMultiplier.toFixed(1)}x
                     </span>
-                    <span className="text-xs text-gray-600">
-                      {lead.stage ?? 'unknown'}
-                    </span>
+                    <span className="text-xs text-gray-600">{lead.stage ?? 'unknown'}</span>
                   </div>
                 </div>
               ))}
@@ -159,8 +265,8 @@ function ShadowROICard({
   isDollar?: boolean
 }) {
   return (
-    <div className="rounded-xl bg-gray-900 border border-gray-800 p-5">
-      <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">{label}</div>
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+      <div className="mb-2 text-xs uppercase tracking-wide text-gray-500">{label}</div>
       <div className="flex items-center">
         <span className="text-2xl font-bold text-white">{value}</span>
         {isDollar && (
@@ -171,6 +277,15 @@ function ShadowROICard({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+function StatBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-xs text-gray-500">{label}</div>
     </div>
   )
 }

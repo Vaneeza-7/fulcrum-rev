@@ -11,7 +11,6 @@ const VALID_STATUSES = new Set([
   'approved',
   'pushed_to_crm',
   'rejected',
-  'cancelled_creditzero',
 ])
 
 export async function PATCH(

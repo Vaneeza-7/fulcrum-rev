@@ -1,25 +1,20 @@
 import { ERPConnector } from './base-erp-connector';
 import { ERPAuthConfig } from './types';
-import { NetSuiteConnector } from './netsuite-connector';
-
-const CONNECTORS: Record<string, new (config: ERPAuthConfig) => ERPConnector> = {
-  netsuite: NetSuiteConnector,
-};
 
 /**
  * Factory for creating ERP connectors.
- * Adding a new ERP = add a new connector class + register it here.
+ * ERP sync is intentionally out of scope until there is an active customer requirement.
  */
 export class ERPFactory {
-  static create(erpType: string, config: Record<string, string | undefined>): ERPConnector {
-    const ConnectorClass = CONNECTORS[erpType.toLowerCase()];
-    if (!ConnectorClass) {
-      throw new Error(`Unsupported ERP type: ${erpType}. Supported: ${Object.keys(CONNECTORS).join(', ')}`);
+  static create(erpType: string, _config: Record<string, string | undefined>): ERPConnector {
+    if (erpType.toLowerCase() === 'netsuite') {
+      throw new Error('NetSuite ERP integration is intentionally unsupported in this deployment');
     }
-    return new ConnectorClass(config as ERPAuthConfig);
+
+    throw new Error(`Unsupported ERP type: ${erpType}. No ERP connectors are currently supported.`);
   }
 
   static supportedTypes(): string[] {
-    return Object.keys(CONNECTORS);
+    return [];
   }
 }

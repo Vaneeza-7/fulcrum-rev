@@ -334,11 +334,14 @@ paths:
                 anthropicApiKey:
                   type: string
                   nullable: true
+                perplexityApiKey:
+                  type: string
+                  nullable: true
                 clear:
                   type: array
                   items:
                     type: string
-                    enum: [instantly, apify, anthropic]
+                    enum: [instantly, apify, anthropic, perplexity]
       responses:
         '200':
           description: Provider keys saved
@@ -360,6 +363,51 @@ paths:
                 properties:
                   billing:
                     $ref: '#/components/schemas/BillingSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/billing/history:
+    get:
+      tags: [Billing]
+      summary: Get current-period provider usage history
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+        - in: query
+          name: provider
+          schema:
+            type: string
+        - in: query
+          name: stage
+          schema:
+            type: string
+        - in: query
+          name: billableOnly
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Billing history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  total:
+                    type: integer
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BillingHistoryEntry'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/billing/checkout:
@@ -520,7 +568,7 @@ paths:
   /api/cron/billing-sync:
     post:
       tags: [Cron]
-      summary: Sync metered overage to Stripe
+      summary: Roll manual billing periods and issue monthly grants
       responses:
         '200':
           description: Job result
@@ -723,12 +771,21 @@ components:
                   type: boolean
                 hasPlatformFallback:
                   type: boolean
+            perplexity:
+              type: object
+              properties:
+                usingTenantKey:
+                  type: boolean
+                hasPlatformFallback:
+                  type: boolean
     BillingSummary:
       type: object
       properties:
         planSlug:
           type: string
           nullable: true
+        billingSource:
+          type: string
         subscriptionStatus:
           type: string
         currentPeriodStart:
@@ -740,20 +797,90 @@ components:
           format: date-time
           nullable: true
         includedCredits:
-          type: number
-        providerCostUsdCentsPerCredit:
-          type: number
-        creditSellPriceUsdCents:
-          type: number
-        recommendedBaseMonthlyUsdCents:
-          type: integer
+          type: string
+        creditUnitUsd:
+          type: string
         targetMarkupMultiplier:
-          type: number
+          type: string
         usedCredits:
-          type: number
-        remainingIncludedCredits:
-          type: number
-        overageCredits:
-          type: number
-        projectedOverageUsdCents:
-          type: integer
+          type: string
+        remainingCredits:
+          type: string
+        providerCostUsd:
+          type: string
+        projectedBillableUsd:
+          type: string
+        providerBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              stage:
+                type: string
+              credits:
+                type: string
+              providerCostUsd:
+                type: string
+              projectedBillableUsd:
+                type: string
+              requestCount:
+                type: integer
+              billable:
+                type: boolean
+        unpricedActivity:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              stage:
+                type: string
+              activityCount:
+                type: integer
+              reason:
+                type: string
+    BillingHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        provider:
+          type: string
+        stage:
+          type: string
+        credits:
+          type: string
+        providerCostUsd:
+          type: string
+        projectedBillableUsd:
+          type: string
+        leadId:
+          type: string
+          format: uuid
+          nullable: true
+        leadName:
+          type: string
+          nullable: true
+        tenantOwnedCredentialUsed:
+          type: boolean
+        billable:
+          type: boolean
+        usage:
+          type: object
+          properties:
+            inputTokens:
+              type: integer
+            outputTokens:
+              type: integer
+            requestCount:
+              type: integer
+            searchQueries:
+              type: integer
+              nullable: true

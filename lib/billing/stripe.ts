@@ -327,9 +327,14 @@ export async function syncBillingAccountFromSubscription(subscription: any) {
       await grantIncludedCreditsForPeriod({
         tenantId,
         planSlug,
-        subscriptionId: account.stripeSubscriptionId,
+        source: 'subscription_grant',
+        externalReference: `subscription_grant:${account.stripeSubscriptionId}:${periodStart.toISOString()}:${periodEnd.toISOString()}`,
         periodStart,
         periodEnd,
+        metadata: {
+          subscriptionId: account.stripeSubscriptionId,
+          billingSource: 'stripe',
+        },
       })
     }
   }

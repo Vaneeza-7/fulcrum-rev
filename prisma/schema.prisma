@@ -22,6 +22,7 @@ model Tenant {
   instantlyConfig       Json     @default("{}") @map("instantly_config")
   apifyApiToken         String?  @map("apify_api_token")
   anthropicApiKey       String?  @map("anthropic_api_key")
+  perplexityApiKey      String?  @map("perplexity_api_key")
   isActive              Boolean  @default(true) @map("is_active")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -73,6 +74,7 @@ model Tenant {
   fulcrumSourceTags    FulcrumSourceTag[]
   roiAttributions      ROIAttribution[]
   creditLedgerEntries  FulcrumCreditLedger[]
+  providerUsageEvents  ProviderUsageEvent[]
   negativeSignals      NegativeSignal[]
   profile              TenantProfile?
   competitors          TenantCompetitor[]
@@ -371,8 +373,11 @@ model TenantBillingAccount {
   stripeCustomerId      String?  @unique @map("stripe_customer_id")
   stripeSubscriptionId  String?  @unique @map("stripe_subscription_id")
   stripeOverageSubscriptionItemId String? @map("stripe_overage_subscription_item_id")
+  billingSource         String   @default("manual") @map("billing_source")
   subscriptionStatus    String   @default("inactive") @map("subscription_status")
   planSlug              String?  @map("plan_slug")
+  planAssignedAt        DateTime? @map("plan_assigned_at")
+  planAssignedBy        String?  @map("plan_assigned_by")
   currentPeriodStart    DateTime? @map("current_period_start")
   currentPeriodEnd      DateTime? @map("current_period_end")
   billingEmail          String?  @map("billing_email")
@@ -389,25 +394,77 @@ model TenantBillingAccount {
 }
 
 model FulcrumCreditLedger {
-  id                String    @id @default(uuid()) @db.Uuid
-  tenantId          String    @map("tenant_id") @db.Uuid
-  entryType         String    @map("entry_type")
-  source            String
-  provider          String?
-  creditDelta       Decimal   @map("credit_delta") @db.Decimal(12, 4)
-  usdAmountCents    Int       @default(0) @map("usd_amount_cents")
-  metadata          Json      @default("{}")
-  externalReference String?   @map("external_reference")
+  id                     String    @id @default(uuid()) @db.Uuid
+  tenantId               String    @map("tenant_id") @db.Uuid
+  entryType              String    @map("entry_type")
+  source                 String
+  provider               String?
+  creditDelta            Decimal   @map("credit_delta") @db.Decimal(12, 4)
+  usdAmountCents         Int       @default(0) @map("usd_amount_cents")
+  providerCostUsdMicros  Int       @default(0) @map("provider_cost_usd_micros")
+  customerBillableUsdMicros Int    @default(0) @map("customer_billable_usd_micros")
+  pricingUnitVersion     Int       @default(2) @map("pricing_unit_version")
+  metadata               Json      @default("{}")
+  externalReference      String?   @map("external_reference")
+  usageEventId           String?   @unique @map("usage_event_id") @db.Uuid
   reportedToStripeAt DateTime? @map("reported_to_stripe_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usageEvent ProviderUsageEvent? @relation(fields: [usageEventId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, entryType])
   @@index([tenantId, source])
   @@map("fulcrum_credit_ledger")
+}
+
+model ProviderPricingConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  provider         String
+  model            String?
+  operationType    String   @map("operation_type")
+  usdMicrosPerUnit Decimal  @map("usd_micros_per_unit") @db.Decimal(18, 6)
+  source           String
+  effectiveFrom    DateTime @map("effective_from")
+  effectiveTo      DateTime? @map("effective_to")
+  isActive         Boolean  @default(true) @map("is_active")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([provider, operationType, isActive])
+  @@index([provider, model, operationType, effectiveFrom(sort: Desc)])
+  @@map("provider_pricing_configs")
+}
+
+model ProviderUsageEvent {
+  id                      String   @id @default(uuid()) @db.Uuid
+  tenantId                String   @map("tenant_id") @db.Uuid
+  leadId                  String?  @map("lead_id") @db.Uuid
+  provider                String
+  model                   String?
+  feature                 String
+  stage                   String
+  requestCount            Int      @default(1) @map("request_count")
+  inputTokens             Int      @default(0) @map("input_tokens")
+  outputTokens            Int      @default(0) @map("output_tokens")
+  providerCostUsdMicros   Int      @default(0) @map("provider_cost_usd_micros")
+  pricingSource           String   @map("pricing_source")
+  tenantOwnedCredentialUsed Boolean @default(false) @map("tenant_owned_credential_used")
+  externalRequestId       String?  @map("external_request_id")
+  metadata                Json     @default("{}")
+  createdAt               DateTime @default(now()) @map("created_at")
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledgerEntry FulcrumCreditLedger?
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, provider, stage])
+  @@index([tenantId, leadId])
+  @@map("provider_usage_events")
 }
 
 model StripeWebhookEvent {

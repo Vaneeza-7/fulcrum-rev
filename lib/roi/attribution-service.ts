@@ -4,15 +4,10 @@ import { getLeadLedgerSpend } from '@/lib/billing/ledger';
 export class ROIAttributionService {
 
   /**
-   * Recalculate totalCreditSpend for a lead.
-   *
-   * TODO: Replace with actual FulcrumCreditLedger query when credit tracking is implemented.
-   * Currently sets totalCreditSpend to 0 as a placeholder since FulcrumCreditLedger
-   * does not exist yet. When it's added, sum all credit ledger entries where the
-   * metadata references this leadId.
+   * Recalculate provider-cost spend for a lead from exact-cost v2 ledger rows.
    */
   static async syncCreditSpend(tenantId: string, leadId: string): Promise<void> {
-    const totalSpend = (await getLeadLedgerSpend(tenantId, leadId)).usdAmountCents / 100;
+    const totalSpend = (await getLeadLedgerSpend(tenantId, leadId)).providerCostUsdMicros / 1_000_000;
 
     await prisma.rOIAttribution.updateMany({
       where: { tenantId, leadId },

@@ -1,7 +1,7 @@
 import { prisma, auditLog } from '@/lib/db';
 import { deduplicateProfiles } from './deduplicator';
 import { enrichProfileWithUsage } from './enricher';
-import { detectSignals } from './signal-detector';
+import { detectSignalsWithUsage } from './signal-detector';
 import { scoreLead } from './scorer';
 import { generateFirstLineWithUsage } from './first-line';
 import { PipelineResult } from './types';
@@ -14,7 +14,14 @@ import { sendPipelineSummary } from '@/lib/slack/client';
 import { SlackLeadCard, SlackPipelineSummary } from '@/lib/slack/types';
 import { decryptCrmConfig } from '@/lib/settings/crm';
 import { LeadDiscoveryService } from '@/lib/discovery/service';
-import { recordDiscoveryLeadUsage, recordEnrichmentUsage, recordFirstLineUsage } from '@/lib/billing/usage';
+import {
+  recordDiscoveryLeadUsage,
+  recordEnrichmentUsage,
+  recordFirstLineUsage,
+  recordPerplexityResearchUsage,
+  recordSignalDetectionUsage,
+} from '@/lib/billing/usage';
+import { resolvePerplexityCredentials } from '@/lib/settings/api-keys';
 
 const log = jobLogger('pipeline-orchestrator');
 
@@ -45,6 +52,8 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   let providerFallbackUsed = false;
   let anthropicApiKey: string | undefined;
   let anthropicUsingTenantKey = false;
+  let perplexityApiKey: string | undefined;
+  let perplexityUsingTenantKey = false;
   let discoveryProviderUsesTenantKey = false;
   try {
     const discoveryResult = await LeadDiscoveryService.discoverForTenant({
@@ -67,6 +76,11 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     providerFallbackUsed = discoveryResult.providerFallbackUsed;
     anthropicApiKey = discoveryResult.credentials.anthropic.apiKey ?? undefined;
     anthropicUsingTenantKey = discoveryResult.credentials.anthropic.usingTenantKey;
+    const perplexityCredentials = resolvePerplexityCredentials({
+      perplexityApiKey: tenant.perplexityApiKey,
+    });
+    perplexityApiKey = perplexityCredentials.apiKey ?? undefined;
+    perplexityUsingTenantKey = perplexityCredentials.usingTenantKey;
     discoveryProviderUsesTenantKey =
       discoveryResult.providerUsed === 'apify'
         ? discoveryResult.credentials.apify.usingTenantKey
@@ -117,7 +131,10 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   for (const profile of newProfiles) {
     try {
       // 3. ENRICH
-      const enrichmentResult = await enrichProfileWithUsage(profile, { anthropicApiKey });
+      const enrichmentResult = await enrichProfileWithUsage(profile, {
+        anthropicApiKey,
+        perplexityApiKey,
+      });
       const enrichment = enrichmentResult.enrichment;
       enrichedCount++;
 
@@ -126,7 +143,10 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
         keyword: k.keyword,
         intentScore: Number(k.intentScore),
       }));
-      const signals = await detectSignals(enrichment, keywords);
+      const signalDetectionResult = await detectSignalsWithUsage(enrichment, keywords, {
+        anthropicApiKey,
+      });
+      const signals = signalDetectionResult.signals;
 
       // 5. SCORE
       const score = await scoreLead(tenantId, enrichment, signals);
@@ -209,6 +229,23 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
         usage: enrichmentResult.usage,
         model: enrichmentResult.model,
         tenantOwnedCredentialUsed: anthropicUsingTenantKey,
+      });
+
+      await recordSignalDetectionUsage({
+        tenantId,
+        leadId: lead.id,
+        usage: signalDetectionResult.usage,
+        model: signalDetectionResult.model,
+        tenantOwnedCredentialUsed: anthropicUsingTenantKey,
+      });
+
+      await recordPerplexityResearchUsage({
+        tenantId,
+        leadId: lead.id,
+        usage: enrichmentResult.researchUsage,
+        model: enrichmentResult.researchModel,
+        directCostUsdMicros: enrichmentResult.researchProviderCostUsdMicros,
+        tenantOwnedCredentialUsed: perplexityUsingTenantKey,
       });
 
       if (firstLineUsage) {

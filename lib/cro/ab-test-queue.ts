@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { askClaudeJson } from '@/lib/ai/claude';
 import { ABTestHypothesis } from './types';
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys';
 
 /**
  * A/B Test Queue — generates, prioritizes, and manages conversion experiments.
@@ -32,6 +33,10 @@ export async function generateTestHypotheses(
   croAuditId: string
 ): Promise<ABTestHypothesis[]> {
   const audit = await prisma.cROAudit.findUniqueOrThrow({ where: { id: croAuditId } });
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
 
   const prompt = `Page: ${audit.pageUrl} (type: ${audit.pageType})
 Metrics: ${JSON.stringify(audit.metrics)}
@@ -41,7 +46,17 @@ Estimated pipeline impact: $${Number(audit.estimatedPipelineImpact ?? 0).toLocal
 
   const hypotheses = await askClaudeJson<ABTestHypothesis[]>(
     AB_TEST_GENERATION_PROMPT,
-    prompt
+    prompt,
+    {
+      apiKey: anthropicCredentials.apiKey ?? undefined,
+      billingContext: {
+        tenantId,
+        provider: 'anthropic',
+        feature: 'cro',
+        stage: 'cro.ab_hypothesis',
+        metadata: { croAuditId },
+      },
+    },
   );
 
   // Store as ABTest records

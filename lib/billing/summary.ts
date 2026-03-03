@@ -1,67 +1,150 @@
 import { prisma } from '@/lib/db'
+import {
+  formatCredits,
+  formatUsdMicros,
+  getCreditUnitUsdDisplay,
+  getTargetMarkupMultiplierDisplay,
+} from './credit-rules'
+import { getBillingPeriodWindow } from './manual-plans'
 import { getBillingPlan, isPlanSlug } from './plans'
+
+function sumCredits(values: Array<{ creditDelta: unknown }>) {
+  return values.reduce((sum, entry) => sum + Math.abs(Number(entry.creditDelta ?? 0)), 0)
+}
 
 export async function getTenantBillingSummary(tenantId: string) {
   const account = await prisma.tenantBillingAccount.findUnique({
     where: { tenantId },
   })
 
-  if (!account || !account.planSlug || !isPlanSlug(account.planSlug)) {
-    return {
-      billing: {
-        planSlug: null,
-        subscriptionStatus: account?.subscriptionStatus ?? 'inactive',
-        currentPeriodStart: account?.currentPeriodStart ?? null,
-        currentPeriodEnd: account?.currentPeriodEnd ?? null,
-        includedCredits: 0,
-        providerCostUsdCentsPerCredit: 1,
-        creditSellPriceUsdCents: 0,
-        recommendedBaseMonthlyUsdCents: 0,
-        targetMarkupMultiplier: 0,
-        usedCredits: 0,
-        remainingIncludedCredits: 0,
-        overageCredits: 0,
-        projectedOverageUsdCents: 0,
+  const { currentPeriodStart, currentPeriodEnd } = getBillingPeriodWindow(account)
+  const plan = account?.planSlug && isPlanSlug(account.planSlug)
+    ? getBillingPlan(account.planSlug)
+    : null
+
+  const [usageEntries, usageEvents] = await Promise.all([
+    prisma.fulcrumCreditLedger.findMany({
+      where: {
+        tenantId,
+        entryType: 'usage',
+        pricingUnitVersion: 2,
+        createdAt: {
+          gte: currentPeriodStart,
+          lt: currentPeriodEnd,
+        },
       },
-      account,
+      select: {
+        creditDelta: true,
+      },
+    }),
+    prisma.providerUsageEvent.findMany({
+      where: {
+        tenantId,
+        createdAt: {
+          gte: currentPeriodStart,
+          lt: currentPeriodEnd,
+        },
+      },
+      select: {
+        provider: true,
+        stage: true,
+        requestCount: true,
+        providerCostUsdMicros: true,
+        tenantOwnedCredentialUsed: true,
+        pricingSource: true,
+      },
+    }),
+  ])
+
+  const usedCreditsNumber = sumCredits(usageEntries)
+  const includedCreditsNumber = plan?.includedCredits ?? 0
+  const remainingCreditsNumber = Math.max(includedCreditsNumber - usedCreditsNumber, 0)
+
+  const providerBreakdownMap = new Map<string, {
+    provider: string
+    stage: string
+    credits: number
+    providerCostUsdMicros: number
+    projectedBillableUsdMicros: number
+    requestCount: number
+    billable: boolean
+  }>()
+
+  const unpricedActivityMap = new Map<string, {
+    provider: string
+    stage: string
+    activityCount: number
+    reason: string
+  }>()
+
+  let providerCostUsdMicros = 0
+  let projectedBillableUsdMicros = 0
+
+  for (const event of usageEvents) {
+    const billable = event.providerCostUsdMicros > 0 && !event.tenantOwnedCredentialUsed
+
+    if (billable) {
+      providerCostUsdMicros += event.providerCostUsdMicros
+      projectedBillableUsdMicros += event.providerCostUsdMicros * 3
+
+      const key = `${event.provider}:${event.stage}`
+      const current = providerBreakdownMap.get(key) ?? {
+        provider: event.provider,
+        stage: event.stage,
+        credits: 0,
+        providerCostUsdMicros: 0,
+        projectedBillableUsdMicros: 0,
+        requestCount: 0,
+        billable: true,
+      }
+
+      current.credits += event.providerCostUsdMicros / 1_000
+      current.providerCostUsdMicros += event.providerCostUsdMicros
+      current.projectedBillableUsdMicros += event.providerCostUsdMicros * 3
+      current.requestCount += event.requestCount
+      providerBreakdownMap.set(key, current)
+      continue
+    }
+
+    if (event.pricingSource === 'subscription_priced_deferred') {
+      const key = `${event.provider}:${event.stage}`
+      const current = unpricedActivityMap.get(key) ?? {
+        provider: event.provider,
+        stage: event.stage,
+        activityCount: 0,
+        reason: 'subscription_priced_deferred',
+      }
+      current.activityCount += event.requestCount
+      unpricedActivityMap.set(key, current)
     }
   }
 
-  const plan = getBillingPlan(account.planSlug)
-  const periodStart = account.currentPeriodStart ?? new Date(0)
-  const periodEnd = account.currentPeriodEnd ?? new Date()
-
-  const usageEntries = await prisma.fulcrumCreditLedger.findMany({
-    where: {
-      tenantId,
-      entryType: 'usage',
-      createdAt: {
-        gte: periodStart,
-        lte: periodEnd,
-      },
-    },
-  })
-
-  const usedCredits = usageEntries.reduce((sum, entry) => sum + Math.abs(Number(entry.creditDelta)), 0)
-  const remainingIncludedCredits = Math.max(plan.includedCredits - usedCredits, 0)
-  const overageCredits = Math.max(usedCredits - plan.includedCredits, 0)
-  const projectedOverageUsdCents = Math.round(overageCredits * plan.creditSellPriceUsdCents)
-
   return {
     billing: {
-      planSlug: account.planSlug,
-      subscriptionStatus: account.subscriptionStatus,
-      currentPeriodStart: account.currentPeriodStart,
-      currentPeriodEnd: account.currentPeriodEnd,
-      includedCredits: plan.includedCredits,
-      providerCostUsdCentsPerCredit: plan.providerCostUsdCentsPerCredit,
-      creditSellPriceUsdCents: plan.creditSellPriceUsdCents,
-      recommendedBaseMonthlyUsdCents: plan.recommendedBaseMonthlyUsdCents,
-      targetMarkupMultiplier: plan.targetMarkupMultiplier,
-      usedCredits,
-      remainingIncludedCredits,
-      overageCredits,
-      projectedOverageUsdCents,
+      planSlug: plan?.slug ?? null,
+      billingSource: account?.billingSource ?? 'manual',
+      subscriptionStatus: account?.subscriptionStatus ?? 'inactive',
+      currentPeriodStart,
+      currentPeriodEnd,
+      creditUnitUsd: getCreditUnitUsdDisplay(),
+      targetMarkupMultiplier: getTargetMarkupMultiplierDisplay(),
+      includedCredits: formatCredits(includedCreditsNumber),
+      usedCredits: formatCredits(usedCreditsNumber),
+      remainingCredits: formatCredits(remainingCreditsNumber),
+      providerCostUsd: formatUsdMicros(providerCostUsdMicros),
+      projectedBillableUsd: formatUsdMicros(projectedBillableUsdMicros),
+      providerBreakdown: Array.from(providerBreakdownMap.values())
+        .sort((a, b) => b.providerCostUsdMicros - a.providerCostUsdMicros)
+        .map((entry) => ({
+          provider: entry.provider,
+          stage: entry.stage,
+          credits: formatCredits(entry.credits),
+          providerCostUsd: formatUsdMicros(entry.providerCostUsdMicros),
+          projectedBillableUsd: formatUsdMicros(entry.projectedBillableUsdMicros),
+          requestCount: entry.requestCount,
+          billable: entry.billable,
+        })),
+      unpricedActivity: Array.from(unpricedActivityMap.values()).sort((a, b) => b.activityCount - a.activityCount),
     },
     account,
   }

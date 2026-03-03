@@ -8,6 +8,7 @@ import { sendStallAlert } from '@/lib/huck/proactive';
 import { SlackDealAlert } from '@/lib/slack/types';
 import { jobLogger } from '@/lib/logger';
 import { decryptCrmConfig } from '@/lib/settings/crm';
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys';
 
 const log = jobLogger('deal_diagnostics');
 
@@ -56,6 +57,9 @@ export async function runDealDiagnostics(tenantId: string): Promise<{ checked: n
   if (!crmConfig) {
     throw new Error('CRM config missing or unreadable');
   }
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
 
   const crm = CRMFactory.create(tenant.crmType, crmConfig);
   await crm.authenticate();
@@ -112,7 +116,17 @@ export async function runDealDiagnostics(tenantId: string): Promise<{ checked: n
       try {
         const reengagement = await askClaudeJson<ReengagementResult>(
           REENGAGEMENT_SYSTEM_PROMPT,
-          `Deal: ${deal.name}\nValue: $${deal.value}\nStage: ${deal.stage}\nReason stalled: ${reason}\nContact: ${deal.contact_name}\nOwner: ${deal.owner}`
+          `Deal: ${deal.name}\nValue: $${deal.value}\nStage: ${deal.stage}\nReason stalled: ${reason}\nContact: ${deal.contact_name}\nOwner: ${deal.owner}`,
+          {
+            apiKey: anthropicCredentials.apiKey ?? undefined,
+            billingContext: {
+              tenantId,
+              provider: 'anthropic',
+              feature: 'diagnostics',
+              stage: 'diagnostics.reengagement',
+              metadata: { dealId: deal.id, dealName: deal.name },
+            },
+          },
         );
 
         // Create task in CRM

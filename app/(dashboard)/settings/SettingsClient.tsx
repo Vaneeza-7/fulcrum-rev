@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { QueryEditor, type SearchQuery } from '@/components/onboarding/QueryEditor'
 import { KeywordEditor, type IntentKeyword } from '@/components/onboarding/KeywordEditor'
 import { ScoringEditor, type ScoringConfig } from '@/components/onboarding/ScoringEditor'
 import { IntegrationEditor } from '@/components/onboarding/IntegrationEditor'
+import { ApiKeyEditor, type ApiKeySettings, type ApiKeyUpdatePayload } from '@/components/settings/ApiKeyEditor'
 
 interface SettingsClientProps {
   tenant: {
@@ -18,6 +20,7 @@ interface SettingsClientProps {
   scoringConfig: ScoringConfig
   hasCrm: boolean
   hasSlack: boolean
+  apiKeySettings: ApiKeySettings
 }
 
 const TABS = [
@@ -25,6 +28,7 @@ const TABS = [
   { key: 'keywords', label: 'Intent Keywords' },
   { key: 'scoring', label: 'Scoring' },
   { key: 'integrations', label: 'Integrations' },
+  { key: 'api-keys', label: 'API Keys' },
 ]
 
 export function SettingsClient({
@@ -34,7 +38,9 @@ export function SettingsClient({
   scoringConfig,
   hasCrm,
   hasSlack,
+  apiKeySettings,
 }: SettingsClientProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState('queries')
   const [saved, setSaved] = useState(false)
 
@@ -43,13 +49,18 @@ export function SettingsClient({
     setTimeout(() => setSaved(false), 2000)
   }
 
+  function handleSaveSuccess() {
+    showSaved()
+    router.refresh()
+  }
+
   async function handleSaveQueries(queries: SearchQuery[]) {
     const res = await fetch('/api/settings/search-queries', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ queries }),
     })
-    if (res.ok) showSaved()
+    if (res.ok) handleSaveSuccess()
   }
 
   async function handleSaveKeywords(keywords: IntentKeyword[]) {
@@ -58,7 +69,7 @@ export function SettingsClient({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keywords }),
     })
-    if (res.ok) showSaved()
+    if (res.ok) handleSaveSuccess()
   }
 
   async function handleSaveScoring(scoring: ScoringConfig) {
@@ -67,7 +78,7 @@ export function SettingsClient({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scoringConfig: scoring }),
     })
-    if (res.ok) showSaved()
+    if (res.ok) handleSaveSuccess()
   }
 
   async function handleSaveIntegrations(data: {
@@ -95,7 +106,26 @@ export function SettingsClient({
         : Promise.resolve(new Response(null, { status: 204 })),
     ])
 
-    if (responses.every((response) => response.ok)) showSaved()
+    if (responses.every((response) => response.ok)) handleSaveSuccess()
+  }
+
+  async function handleSaveApiKeys(payload: ApiKeyUpdatePayload): Promise<ApiKeySettings> {
+    const res = await fetch('/api/settings/api-keys', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new Error((body as { error?: string } | null)?.error ?? 'Failed to save API keys')
+    }
+
+    handleSaveSuccess()
+    return {
+      primaryLeadProvider: body.primaryLeadProvider,
+      providers: body.providers,
+    } satisfies ApiKeySettings
   }
 
   return (
@@ -160,6 +190,14 @@ export function SettingsClient({
             hasCrm={hasCrm}
             hasSlack={hasSlack}
             onSave={handleSaveIntegrations}
+            saveLabel="Save Changes"
+          />
+        )}
+
+        {activeTab === 'api-keys' && (
+          <ApiKeyEditor
+            initialSettings={apiKeySettings}
+            onSave={handleSaveApiKeys}
             saveLabel="Save Changes"
           />
         )}

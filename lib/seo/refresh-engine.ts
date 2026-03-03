@@ -4,6 +4,7 @@ import { askClaudeJson } from '@/lib/ai/claude';
 import { SEO_REFRESH_BRIEF_PROMPT, CANNIBALIZATION_RESOLUTION_PROMPT } from '@/lib/ai/prompts';
 import { DataForSEOConnector } from './dataforseo-connector';
 import { RefreshBrief, CannibalizationResult, DataForSEOAuthConfig } from './types';
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys';
 
 /**
  * SEO Refresh Engine — generates refresh briefs and detects cannibalization.
@@ -30,6 +31,9 @@ export async function generateRefreshBrief(
   // Get competitor SERP data if DataForSEO is configured
   let competitorContext = '';
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
   const dfConfig = decryptTenantConfig<DataForSEOAuthConfig>(tenant.dataforseoConfig as any);
   if (dfConfig?.login && dfConfig?.password) {
     try {
@@ -61,7 +65,16 @@ ${competitorContext}
 Available internal links:
 ${internalLinks.map((l) => `- "${l.title}" (${l.url})`).join('\n')}`;
 
-  const brief = await askClaudeJson<RefreshBrief>(SEO_REFRESH_BRIEF_PROMPT, prompt);
+  const brief = await askClaudeJson<RefreshBrief>(SEO_REFRESH_BRIEF_PROMPT, prompt, {
+    apiKey: anthropicCredentials.apiKey ?? undefined,
+    billingContext: {
+      tenantId,
+      provider: 'anthropic',
+      feature: 'seo',
+      stage: 'seo.refresh_brief',
+      metadata: { auditId },
+    },
+  });
 
   // Store brief on the audit record
   await prisma.sEOAudit.update({
@@ -139,9 +152,24 @@ ${details.assets.map((a) => `- "${a.title}" (${a.url}) at position #${a.position
 
 Recommend: merge (301 redirect weaker → stronger), redirect, or differentiate (refocus weaker on different keyword).`;
 
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
+
   const result = await askClaudeJson<{ recommendation: string; details: string }>(
     CANNIBALIZATION_RESOLUTION_PROMPT,
-    prompt
+    prompt,
+    {
+      apiKey: anthropicCredentials.apiKey ?? undefined,
+      billingContext: {
+        tenantId,
+        provider: 'anthropic',
+        feature: 'seo',
+        stage: 'seo.recommendation',
+        metadata: { auditId },
+      },
+    },
   );
 
   await prisma.sEOAudit.update({

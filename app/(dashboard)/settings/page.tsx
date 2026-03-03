@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { getTenantCrmSettings } from '@/lib/settings/crm'
+import { getTenantApiKeySettings } from '@/lib/settings/api-keys'
 import { SettingsClient } from './SettingsClient'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +31,10 @@ export default async function SettingsPage() {
   })
   if (!tenant) redirect('/step-1')
 
-  const crm = await getTenantCrmSettings(prisma, tenant.id)
+  const [crm, apiKeySettings] = await Promise.all([
+    getTenantCrmSettings(prisma, tenant.id),
+    getTenantApiKeySettings(prisma, tenant.id),
+  ])
 
   const queries = tenant.searchQueries.map((q) => ({
     queryName: q.queryName,
@@ -75,6 +79,7 @@ export default async function SettingsPage() {
       scoringConfig={scoring}
       hasCrm={crm.hasTenantConfig}
       hasSlack={!!tenant.slackConfig}
+      apiKeySettings={apiKeySettings}
     />
   )
 }

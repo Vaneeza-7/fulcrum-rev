@@ -1,27 +1,28 @@
 # Fulcrum Revenue Operating System — CRO Knowledge Base
 
-> This document is the AI agent's operational memory for the Fulcrum platform.
-> Copy this into your Notion CRO Knowledge workspace for reference as you build out the AI agency system.
+> This document now serves as CRO strategy memory, not as the source of truth for the live system architecture.
+> For current routes, stack, and deployment behavior, use `docs/ARCHITECT-BRIEF.md`, `docs/BILLING.md`, and `docs/openapi.yaml`.
 
 ---
 
 ## System Overview
 
-**Fulcrum** is a multi-tenant B2B lead generation and qualification engine. It discovers prospects via LinkedIn (Apify), enriches them with AI (Perplexity + Claude), scores them on a dual-axis model, and pushes qualified leads to customer CRMs. There is no web UI — Slack is the control plane.
+**Fulcrum** is a multi-tenant RevOps platform with onboarding and dashboard experiences at `/step-1` through `/step-6`, `/`, `/leads`, `/usage`, and `/settings`. Lead discovery is Instantly-first with Apify fallback, AI enrichment uses Perplexity + Anthropic, and exact-cost billing is tracked for metered AI providers.
 
 **Project Location:** `~/fulcrum-rev`
-**Stack:** Next.js 14 (API-only) / Neon PostgreSQL / Prisma 7 / Clerk / Slack / DigitalOcean
-**Neon Project ID:** `restless-grass-89011670`
-**Database:** `neondb`
+**Current Stack:** Next.js 16 / Neon PostgreSQL / Prisma 6 / Clerk / Vercel / Slack / Sentry
+**Current Architecture References:** `docs/ARCHITECT-BRIEF.md`, `docs/BILLING.md`, `docs/openapi.yaml`
 
 ---
 
 ## Architecture
 
 ```
-LinkedIn (Apify) → Scraper → Deduplicator → Enricher (Perplexity + Claude)
-  → Signal Detector (Claude) → Scorer (DB-driven weights)
-  → First-Line Generator (Claude) → Slack Notification → CRM Push
+Instantly / Apify → Discovery → Deduplicator → Enricher (Perplexity + Anthropic)
+  → Signal Detector (Anthropic) → Scorer (DB-driven weights)
+  → First-Line Generator (Anthropic) → Slack Notification → CRM Push
+
+This document keeps CRO patterns and heuristics. Where any deeper implementation note below conflicts with the current codebase, treat the codebase and the current architecture docs as authoritative.
 ```
 
 ### Key Design Principles
@@ -371,34 +372,37 @@ All CRM operations go through `CRMConnector` interface:
 |---------|-----|---------|
 | Neon | neon.tech | PostgreSQL database |
 | Clerk | clerk.com | Multi-tenant auth |
-| Apify | apify.com | LinkedIn scraping |
+| Instantly | instantly.ai | Primary lead discovery |
+| Apify | apify.com | Fallback lead discovery |
 | Anthropic | console.anthropic.com | Claude AI |
 | Perplexity | perplexity.ai/settings/api | Web search enrichment |
 | Slack | api.slack.com/apps | Control plane |
 | Zoho CRM | zoho.com/crm | CRM integration |
-| DigitalOcean | digitalocean.com | Hosting |
+| Vercel | vercel.com | Hosting + cron routing |
 
 ---
 
 ## Key Technical Decisions
 
-1. **Prisma 7 with Neon Adapter** — `PrismaNeon` is a factory that takes `{ connectionString }` config, NOT a Pool instance. It creates its own Pool internally.
+1. **Prisma with Neon Adapter** — `PrismaNeon` is configured from `{ connectionString }`, not a shared Pool instance.
 2. **No SendGrid** — All email goes through the customer's CRM. This simplifies the stack and keeps email reputation tied to the customer's domain.
 3. **Perplexity for enrichment** — Better at finding fresh, factual data with citations than Claude's training data. Claude is used for analysis/reasoning on top of Perplexity's research.
-4. **node-cron in-process** — Simple scheduling within Next.js process. For production scale, consider external scheduler (DigitalOcean cron jobs or dedicated worker).
-5. **RLS with session variables** — `SET LOCAL app.current_tenant` per transaction ensures tenant isolation at the database level.
+4. **Route-driven cron execution** — production scheduling is wired through Vercel cron routes under `/api/cron/*`, not in-process `node-cron`.
+5. **Exact-cost billing before Stripe** — metered `Anthropic` and `Perplexity` spend is recorded in `ProviderUsageEvent` and `FulcrumCreditLedger` using `1 credit = $0.001 provider cost`.
+6. **RLS with session variables** — `SET LOCAL app.current_tenant` per transaction ensures tenant isolation at the database level.
 
 ---
 
 ## Next Steps for Production
 
-1. Set up all API accounts (Clerk, Apify, Anthropic, Perplexity, Slack, Zoho)
+1. Set up all API accounts (Clerk, Instantly, optional Apify fallback, Anthropic, Perplexity, Slack, Zoho)
 2. Configure Clerk webhook endpoint
 3. Create Slack app and install in workspace
 4. Set up Zoho OAuth for each customer
-5. Deploy to DigitalOcean App Platform
-6. Run first live pipeline
-7. Validate end-to-end: Apify → Enrichment → Scoring → Slack → CRM
+5. Seed `ProviderPricingConfig` and assign manual billing plans
+6. Deploy to Vercel
+7. Run first live pipeline
+8. Validate end-to-end: Instantly/Apify → Perplexity → Anthropic → Slack → CRM
 
 ---
 

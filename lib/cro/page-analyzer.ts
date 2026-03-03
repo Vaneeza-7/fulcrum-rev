@@ -6,6 +6,7 @@ import { ClarityConnector } from '@/lib/analytics/clarity-connector';
 import { GA4AuthConfig, ClarityAuthConfig } from '@/lib/analytics/types';
 import { CRO_ANALYSIS_PROMPT } from '@/lib/ai/prompts';
 import { CROAnalysisResult, TrustSignalAudit, PAGE_BENCHMARKS } from './types';
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys';
 
 /**
  * CRO Page Analyzer.
@@ -21,6 +22,9 @@ export async function analyzePage(
   pageType: string
 ): Promise<CROAnalysisResult | null> {
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
   const ga4Config = decryptTenantConfig<GA4AuthConfig>(tenant.ga4Config as any);
 
   if (!ga4Config?.accessToken || !ga4Config?.propertyId) {
@@ -78,7 +82,16 @@ ${clarityData}
 Average deal size: $${avgDealSize.toLocaleString()}
 Monthly visitors: ${pageMetrics.sessions}`;
 
-  const analysis = await askClaudeJson<CROAnalysisResult>(CRO_ANALYSIS_PROMPT, prompt);
+  const analysis = await askClaudeJson<CROAnalysisResult>(CRO_ANALYSIS_PROMPT, prompt, {
+    apiKey: anthropicCredentials.apiKey ?? undefined,
+    billingContext: {
+      tenantId,
+      provider: 'anthropic',
+      feature: 'cro',
+      stage: 'cro.page_analysis',
+      metadata: { pageUrl, pageType },
+    },
+  });
   return analysis;
 }
 

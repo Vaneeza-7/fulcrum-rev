@@ -1,18 +1,12 @@
-import { askClaudeJsonWithUsage, type ClaudeCallResult } from '@/lib/ai/claude';
-import { researchCompany } from '@/lib/ai/perplexity';
-import { ENRICHMENT_SYSTEM_PROMPT } from '@/lib/ai/prompts';
-import { EnrichmentResult } from '@/lib/ai/types';
-import { LinkedInProfile } from './types';
+import { askClaudeJsonWithUsage, type ClaudeCallResult } from '@/lib/ai/claude'
+import { researchCompany } from '@/lib/ai/perplexity'
+import { ENRICHMENT_SYSTEM_PROMPT } from '@/lib/ai/prompts'
+import { EnrichmentResult } from '@/lib/ai/types'
+import { LinkedInProfile } from './types'
 
-/**
- * Enrich a single lead profile using Perplexity (web search) + Claude (analysis).
- *
- * Step 1: Perplexity searches for company funding, size, and news
- * Step 2: Claude analyzes the combined data and produces structured enrichment
- */
 export async function enrichProfile(
   profile: LinkedInProfile,
-  options?: { anthropicApiKey?: string },
+  options?: { anthropicApiKey?: string; perplexityApiKey?: string },
 ): Promise<EnrichmentResult> {
   const result = await enrichProfileWithUsage(profile, options)
   return result.enrichment
@@ -20,27 +14,41 @@ export async function enrichProfile(
 
 export async function enrichProfileWithUsage(
   profile: LinkedInProfile,
-  options?: { anthropicApiKey?: string },
-): Promise<{ enrichment: EnrichmentResult; usage: ClaudeCallResult['usage']; model: string }> {
-  const company = profile.company ?? 'Unknown Company';
-  const name = profile.full_name;
-  const title = profile.title ?? '';
+  options?: { anthropicApiKey?: string; perplexityApiKey?: string },
+): Promise<{
+  enrichment: EnrichmentResult
+  usage: ClaudeCallResult['usage']
+  model: string
+  researchUsage: { inputTokens: number; outputTokens: number; searchQueries: number }
+  researchModel: string
+  researchProviderCostUsdMicros: number | null
+}> {
+  const company = profile.company ?? 'Unknown Company'
+  const name = profile.full_name
+  const title = profile.title ?? ''
 
-  // Step 1: Perplexity web search for real-time data
-  let perplexityData;
+  let perplexityData
   try {
-    perplexityData = await researchCompany(company, name, title);
+    perplexityData = await researchCompany(company, name, title, {
+      apiKey: options?.perplexityApiKey,
+    })
   } catch (error) {
-    console.error(`Perplexity research failed for ${company}:`, error);
+    console.error(`Perplexity research failed for ${company}:`, error)
     perplexityData = {
       raw: '',
       fundingInfo: 'No data available',
       companySize: 'No data available',
       recentNews: 'No data available',
-    };
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        searchQueries: 0,
+      },
+      providerCostUsdMicros: null,
+      model: 'fallback',
+    }
   }
 
-  // Step 2: Claude analyzes everything
   const userMessage = `
 LinkedIn Profile:
 - Name: ${name}
@@ -53,21 +61,24 @@ Web Research (from Perplexity):
 Funding Info: ${perplexityData.fundingInfo}
 Company Size: ${perplexityData.companySize}
 Recent News: ${perplexityData.recentNews}
-`;
+`
 
   try {
     const enrichment = await askClaudeJsonWithUsage<EnrichmentResult>(
       ENRICHMENT_SYSTEM_PROMPT,
       userMessage,
-      { maxTokens: 1500, apiKey: options?.anthropicApiKey }
-    );
+      { maxTokens: 1500, apiKey: options?.anthropicApiKey },
+    )
     return {
       enrichment: enrichment.data,
       usage: enrichment.usage,
       model: enrichment.model,
-    };
+      researchUsage: perplexityData.usage,
+      researchModel: perplexityData.model,
+      researchProviderCostUsdMicros: perplexityData.providerCostUsdMicros,
+    }
   } catch (error) {
-    console.error(`Claude enrichment failed for ${name}:`, error);
+    console.error(`Claude enrichment failed for ${name}:`, error)
     return {
       enrichment: {
         company_size_estimate: 0,
@@ -89,6 +100,9 @@ Recent News: ${perplexityData.recentNews}
         outputTokens: 0,
       },
       model: 'fallback',
-    };
+      researchUsage: perplexityData.usage,
+      researchModel: perplexityData.model,
+      researchProviderCostUsdMicros: perplexityData.providerCostUsdMicros,
+    }
   }
 }

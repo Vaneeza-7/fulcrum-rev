@@ -2,14 +2,14 @@
 
 ## System Status
 
-This repo is no longer a backend-only handoff. The production codebase now includes:
+This repo is not a backend-only handoff anymore. The production codebase now includes:
 
 - tenant onboarding at `/step-1` through `/step-6`
 - dashboard pages at `/`, `/leads`, `/usage`, `/settings`
 - explicit settings APIs under `/api/settings/*`
 - Instantly-first lead discovery with Apify fallback
-- Stripe-backed billing primitives and a local credit ledger
-- ROI spend derived from ledger entries instead of placeholders
+- exact-cost billing telemetry for metered AI providers
+- ROI spend derived from exact provider-cost ledger data
 
 ## Core Architecture
 
@@ -29,13 +29,14 @@ This repo is no longer a backend-only handoff. The production codebase now inclu
 
 ### AI
 
-- Anthropic remains the structured reasoning layer for enrichment and first-line generation
-- per-call usage is exposed through `lib/ai/claude.ts`
-- tenant-owned Anthropic keys override platform credentials when configured
+- Anthropic is the structured reasoning layer
+- Perplexity is the web research layer
+- per-call usage is exposed through `lib/ai/claude.ts` and `lib/ai/perplexity.ts`
+- tenant-owned Anthropic and Perplexity keys override platform credentials when configured
 
 ### Settings Contract
 
-Settings are now explicit resources instead of onboarding-only persistence:
+Settings are explicit resources instead of onboarding-only persistence:
 
 - `/api/settings/search-queries`
 - `/api/settings/intent-keywords`
@@ -48,22 +49,23 @@ Onboarding save routes remain for compatibility and call the same service-layer 
 
 ### Billing
 
-- Stripe subscriptions are modeled through `TenantBillingAccount`
-- included and consumed credits are stored in `FulcrumCreditLedger`
-- webhook idempotency is stored in `StripeWebhookEvent`
-- `1 credit = 1 provider-cost cent`
-- customer pricing is derived from a single markup rule, default `3x`
+- exact-cost billing currently applies to `Anthropic` and `Perplexity`
+- subscription-priced discovery providers are tracked as unpriced operational activity
+- pricing catalog: `ProviderPricingConfig`
+- raw usage audit trail: `ProviderUsageEvent`
+- billable credits and grants: `FulcrumCreditLedger`
+- manual billing state: `TenantBillingAccount`
+- `1 Fulcrum credit = $0.001 provider cost`
+- projected customer billable value is derived from the global markup rule, default `3x`
 - billing summary API: `/api/billing/summary`
-- subscription checkout API: `/api/billing/checkout`
-- billing portal API: `/api/billing/portal`
-- Stripe webhook: `/api/webhooks/stripe`
-- overage sync cron: `/api/cron/billing-sync`
+- billing history API: `/api/billing/history`
+- manual-period grant rollover cron: `/api/cron/billing-sync`
 
 ### ROI and Integrity
 
-- ROI spend is derived from ledger rows tagged to each lead
-- system integrity now reads billing state and remaining included credits
-- dashboard layout no longer relies on the placeholder credit stub
+- ROI spend is derived from v2 exact-cost ledger rows tagged to each lead
+- system integrity reads billing state and remaining exact credits
+- legacy credit-zero pause flows are no longer part of active billing logic
 
 ## Deployed API Surface
 
@@ -74,7 +76,8 @@ Onboarding save routes remain for compatibility and call the same service-layer 
 - `/api/usage/summary`
 - `/api/usage/history`
 - `/api/settings/*`
-- `/api/billing/*`
+- `/api/billing/summary`
+- `/api/billing/history`
 - `/api/system/integrity`
 
 ### Webhooks
@@ -103,18 +106,18 @@ Onboarding save routes remain for compatibility and call the same service-layer 
 
 ## Remaining Work
 
-The major remaining program is UI/UX completion and dashboard depth, not backend scaffolding.
-
 Still open or intentionally shallow:
 
-- settings UI does not yet expose the new API-key workflow
-- Instantly field mapping is intentionally tolerant because the upstream API is less rigid than the stored query model
-- Stripe production setup still depends on real price IDs and webhook configuration in the environment
-- NetSuite remains out of scope unless an active customer requires it
-- broader UI polish, billing pages, and design-system work are still separate from backend completion
+- Stripe activation, product/price setup, and webhook validation are intentionally postponed until the exact-cost model is validated
+- exact-cost allocation for subscription-priced providers is still pending:
+  - `Instantly`
+  - `Apify`
+- NetSuite remains unsupported unless there is an active customer need
+- broader UI/UX redesign remains separate from backend completion
 
 ## Reference Docs
 
 - `docs/openapi.yaml`
 - `docs/DISCOVERY-PROVIDERS.md`
 - `docs/BILLING.md`
+- `docs/CRO-MEMORY.md`

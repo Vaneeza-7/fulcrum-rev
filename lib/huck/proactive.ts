@@ -6,6 +6,7 @@ import { getDataHealthSummary } from '@/lib/health/data-freshness';
 import { ROIAttributionService } from '@/lib/roi/attribution-service';
 import type { PipelineResult } from '@/lib/pipeline/types';
 import type { SlackDealAlert } from '@/lib/slack/types';
+import { resolveAnthropicCredentials } from '@/lib/settings/api-keys';
 
 /**
  * Send Huck's daily pipeline summary in his voice.
@@ -19,6 +20,10 @@ export async function sendDailySummary(
 ): Promise<void> {
   const slack = await getSlackClient(tenantId);
   if (!slack) return;
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const anthropicCredentials = resolveAnthropicCredentials({
+    anthropicApiKey: tenant.anthropicApiKey,
+  });
 
   // Fetch ROI data in parallel with report formatting
   const [roiSummary, topROILeads] = await Promise.all([
@@ -38,7 +43,7 @@ export async function sendDailySummary(
   const roiSection = roiSummary.totalLeads > 0
     ? `Shadow ROI Summary:
 - Fulcrum-sourced leads: ${roiSummary.totalLeads}
-- Total credit invested: ${roiSummary.totalSpend} credits
+- Total provider cost invested: $${roiSummary.totalSpend.toFixed(2)}
 - Estimated attributed revenue: $${roiSummary.totalRevenue.toLocaleString()}
 - Average ROI multiplier: ${roiSummary.avgMultiplier.toFixed(1)}x
 Top 5 leads by ROI:
@@ -57,7 +62,16 @@ ${roiSection}`;
   const huckMessage = await askClaude(
     HUCK_PROACTIVE_SUMMARY_PROMPT,
     contextForClaude,
-    { maxTokens: 512 }
+    {
+      maxTokens: 512,
+      apiKey: anthropicCredentials.apiKey ?? undefined,
+      billingContext: {
+        tenantId,
+        provider: 'anthropic',
+        feature: 'huck',
+        stage: 'huck.daily_summary',
+      },
+    }
   );
 
   await slack.client.chat.postMessage({

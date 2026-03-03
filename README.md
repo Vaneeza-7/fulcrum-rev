@@ -1,6 +1,6 @@
 # Fulcrum Rev
 
-Fulcrum Rev is a multi-tenant RevOps engine built on Next.js, Prisma, Neon, Clerk, and Vercel. It handles tenant onboarding, lead discovery, enrichment, scoring, CRM push, Slack delivery, ROI tracking, and billing.
+Fulcrum Rev is a multi-tenant RevOps engine built on Next.js, Prisma, Neon, Clerk, and Vercel. It handles onboarding, lead discovery, enrichment, scoring, CRM push, Slack delivery, ROI tracking, and exact-cost billing telemetry.
 
 ## Current Product Surface
 
@@ -8,7 +8,8 @@ Fulcrum Rev is a multi-tenant RevOps engine built on Next.js, Prisma, Neon, Cler
 - Onboarding routes: `/step-1` through `/step-6`
 - Settings APIs: `/api/settings/*`
 - Discovery providers: `Instantly` primary, `Apify` fallback
-- Billing APIs: `/api/billing/*`
+- Metered AI providers: `Anthropic`, `Perplexity`
+- Billing APIs: `/api/billing/summary`, `/api/billing/history`
 - Webhooks: `/api/webhooks/clerk`, `/api/webhooks/stripe`
 - Scheduled jobs: `/api/cron/*`
 
@@ -30,6 +31,8 @@ npm test
 npm run build
 npx prisma generate
 npm run db:migrate
+npm run billing:seed-provider-pricing
+npm run billing:assign-plan -- --tenantId <tenant-id> --plan growth
 ```
 
 ## Required Environment
@@ -73,43 +76,39 @@ ZOHO_CLIENT_SECRET=
 ZOHO_REFRESH_TOKEN=
 ```
 
-Billing:
+Billing defaults:
 
 ```bash
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_STARTER_BASE=
-STRIPE_PRICE_STARTER_OVERAGE=
-STRIPE_PRICE_GROWTH_BASE=
-STRIPE_PRICE_GROWTH_OVERAGE=
-STRIPE_PRICE_SCALE_BASE=
-STRIPE_PRICE_SCALE_OVERAGE=
 BILLING_TARGET_MARKUP_MULTIPLIER=3
-BILLING_INCLUDED_CREDITS_STARTER=
-BILLING_INCLUDED_CREDITS_GROWTH=
-BILLING_INCLUDED_CREDITS_SCALE=
+BILLING_INCLUDED_CREDITS_STARTER=5000
+BILLING_INCLUDED_CREDITS_GROWTH=20000
+BILLING_INCLUDED_CREDITS_SCALE=100000
 ```
 
-`BILLING_INCLUDED_CREDITS_*` now represent included provider-cost credits, where `1 credit = 1 provider-cost cent`.
+Optional Stripe envs remain in the codebase, but exact-cost billing currently runs in manual-plan mode before Stripe activation.
 
 ## Discovery Providers
 
 - `Instantly` is the default lead discovery provider.
 - `Apify` remains available behind the provider abstraction as fallback.
-- Tenant-owned Instantly, Apify, and Anthropic credentials can be managed through `/api/settings/api-keys`.
+- Tenant-owned Instantly, Apify, Anthropic, and Perplexity credentials can be managed through `/api/settings/api-keys`.
 - CRM and Slack secrets are encrypted at rest through `lib/db-crypto.ts` when `TOKEN_ENCRYPTION_KEY` is configured.
 
 More detail: `docs/DISCOVERY-PROVIDERS.md`
 
 ## Billing
 
-- Stripe subscriptions support `starter`, `growth`, and `scale`.
-- Monthly included credits are granted into `FulcrumCreditLedger`.
-- Usage from discovery, enrichment, and first-line generation writes negative ledger entries.
-- Each usage entry consumes credits equal to the normalized provider cost in cents.
-- Customer billing is derived from a single markup rule: `BILLING_TARGET_MARKUP_MULTIPLIER`, default `3`.
-- Stripe checkout validates that configured Stripe prices match the derived 3x pricing before creating a subscription.
-- Metered overage is synced by `/api/cron/billing-sync`.
+- Exact-cost billing currently applies only to metered providers:
+  - `Anthropic`
+  - `Perplexity`
+- Subscription-priced discovery providers are tracked operationally but are not part of exact credit billing yet:
+  - `Instantly`
+  - `Apify`
+- `1 Fulcrum credit = $0.001` of provider cost.
+- Customer billable value is derived from a single markup rule: `BILLING_TARGET_MARKUP_MULTIPLIER`, default `3x`.
+- Manual plan assignment is the active billing source before Stripe.
+- Current dashboard billing surfaces are read-only and live on `/usage`.
+- Monthly grants are rolled forward by `/api/cron/billing-sync` for manual accounts.
 
 More detail: `docs/BILLING.md`
 

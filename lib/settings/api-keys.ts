@@ -11,7 +11,7 @@ import {
 type SettingsDbClient = PrismaClient | Prisma.TransactionClient
 
 const providerSchema = z.enum(['instantly', 'apify'])
-const clearSchema = z.enum(['instantly', 'apify', 'anthropic'])
+const clearSchema = z.enum(['instantly', 'apify', 'anthropic', 'perplexity'])
 
 const instantlyConfigSchema = z.object({
   apiKey: z.string().trim().optional(),
@@ -23,6 +23,7 @@ const apiKeysUpdateSchema = z.object({
   instantly: instantlyConfigSchema.optional(),
   apifyApiToken: z.string().trim().nullable().optional(),
   anthropicApiKey: z.string().trim().nullable().optional(),
+  perplexityApiKey: z.string().trim().nullable().optional(),
   clear: z.array(clearSchema).default([]),
 })
 
@@ -46,6 +47,7 @@ export async function getTenantApiKeySettings(db: SettingsDbClient, tenantId: st
       instantlyConfig: true,
       apifyApiToken: true,
       anthropicApiKey: true,
+      perplexityApiKey: true,
     },
   })
 
@@ -53,6 +55,7 @@ export async function getTenantApiKeySettings(db: SettingsDbClient, tenantId: st
   const instantlyApiKey = instantlyConfig.apiKey?.trim() || null
   const apifyApiToken = decryptTenantSecret(tenant.apifyApiToken)
   const anthropicApiKey = decryptTenantSecret(tenant.anthropicApiKey)
+  const perplexityApiKey = decryptTenantSecret(tenant.perplexityApiKey)
 
   return {
     primaryLeadProvider: resolveLeadDiscoveryProvider(tenant.leadDiscoveryProvider),
@@ -69,6 +72,10 @@ export async function getTenantApiKeySettings(db: SettingsDbClient, tenantId: st
       anthropic: {
         usingTenantKey: Boolean(anthropicApiKey),
         hasPlatformFallback: Boolean(env.ANTHROPIC_API_KEY),
+      },
+      perplexity: {
+        usingTenantKey: Boolean(perplexityApiKey),
+        hasPlatformFallback: Boolean(env.PERPLEXITY_API_KEY),
       },
     },
   }
@@ -87,6 +94,7 @@ export async function saveTenantApiKeySettings(
       instantlyConfig: true,
       apifyApiToken: true,
       anthropicApiKey: true,
+      perplexityApiKey: true,
     },
   })
 
@@ -112,6 +120,10 @@ export async function saveTenantApiKeySettings(
     ? null
     : parsed.anthropicApiKey?.trim() || decryptTenantSecret(tenant.anthropicApiKey) || null
 
+  const nextPerplexity = clear.has('perplexity')
+    ? null
+    : parsed.perplexityApiKey?.trim() || decryptTenantSecret(tenant.perplexityApiKey) || null
+
   await db.tenant.update({
     where: { id: tenantId },
     data: {
@@ -119,6 +131,7 @@ export async function saveTenantApiKeySettings(
       instantlyConfig: encryptTenantConfig(mergedInstantly) as Prisma.InputJsonValue,
       apifyApiToken: nextApify ? encryptTenantSecret(nextApify) : null,
       anthropicApiKey: nextAnthropic ? encryptTenantSecret(nextAnthropic) : null,
+      perplexityApiKey: nextPerplexity ? encryptTenantSecret(nextPerplexity) : null,
     },
   })
 
@@ -156,6 +169,17 @@ export function resolveAnthropicCredentials(tenant: {
 
   return {
     apiKey: tenantApiKey ?? env.ANTHROPIC_API_KEY ?? null,
+    usingTenantKey: Boolean(tenantApiKey),
+  }
+}
+
+export function resolvePerplexityCredentials(tenant: {
+  perplexityApiKey: string | null
+}): { apiKey: string | null; usingTenantKey: boolean } {
+  const tenantApiKey = decryptTenantSecret(tenant.perplexityApiKey)
+
+  return {
+    apiKey: tenantApiKey ?? env.PERPLEXITY_API_KEY ?? null,
     usingTenantKey: Boolean(tenantApiKey),
   }
 }

@@ -10,26 +10,26 @@ beforeEach(() => {
 })
 
 describe('billing plans', () => {
-  it('derives starter pricing from a single 3x markup rule', async () => {
+  it('derives starter pricing from exact-cost credit units', async () => {
     const { getBillingPlan } = await import('@/lib/billing/plans')
     const plan = getBillingPlan('starter')
 
-    expect(plan.providerCostUsdCentsPerCredit).toBe(1)
+    expect(plan.providerCostUsdMicrosPerCredit).toBe(1000)
     expect(plan.targetMarkupMultiplier).toBe(3)
-    expect(plan.creditSellPriceUsdCents).toBe(3)
-    expect(plan.includedCredits).toBe(500)
+    expect(plan.creditSellPriceUsdMicros).toBe(3000)
+    expect(plan.includedCredits).toBe(5000)
     expect(plan.recommendedBaseMonthlyUsdCents).toBe(1500)
   })
 
-  it('derives every plan from the same credit sell price', async () => {
+  it('keeps the same sell price per credit across every plan', async () => {
     const { getBillingPlan } = await import('@/lib/billing/plans')
     const starter = getBillingPlan('starter')
     const growth = getBillingPlan('growth')
     const scale = getBillingPlan('scale')
 
-    expect(growth.creditSellPriceUsdCents).toBe(starter.creditSellPriceUsdCents)
-    expect(scale.creditSellPriceUsdCents).toBe(starter.creditSellPriceUsdCents)
-    expect(growth.recommendedBaseMonthlyUsdCents).toBe(growth.includedCredits * growth.creditSellPriceUsdCents)
-    expect(scale.recommendedBaseMonthlyUsdCents).toBe(scale.includedCredits * scale.creditSellPriceUsdCents)
+    expect(growth.creditSellPriceUsdMicros).toBe(starter.creditSellPriceUsdMicros)
+    expect(scale.creditSellPriceUsdMicros).toBe(starter.creditSellPriceUsdMicros)
+    expect(growth.recommendedBaseMonthlyUsdCents).toBe(6000)
+    expect(scale.recommendedBaseMonthlyUsdCents).toBe(30000)
   })
 })

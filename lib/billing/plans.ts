@@ -1,17 +1,20 @@
 import { env } from '@/lib/config'
+import {
+  CREDIT_UNIT_USD_MICROS,
+  getTargetMarkupMultiplier,
+} from './credit-rules'
 
 export type PlanSlug = 'starter' | 'growth' | 'scale'
-
-const PROVIDER_COST_USD_CENTS_PER_CREDIT = 1
-const DEFAULT_TARGET_MARKUP_MULTIPLIER = 3
 
 export interface BillingPlan {
   slug: PlanSlug
   basePriceId: string | null
   overagePriceId: string | null
   includedCredits: number
-  providerCostUsdCentsPerCredit: number
+  providerCostUsdMicrosPerCredit: number
+  creditSellPriceUsdMicros: number
   creditSellPriceUsdCents: number
+  recommendedBaseMonthlyUsdMicros: number
   recommendedBaseMonthlyUsdCents: number
   targetMarkupMultiplier: number
 }
@@ -19,10 +22,6 @@ export interface BillingPlan {
 function readNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
-}
-
-function getTargetMarkupMultiplier() {
-  return readNumber(env.BILLING_TARGET_MARKUP_MULTIPLIER, DEFAULT_TARGET_MARKUP_MULTIPLIER)
 }
 
 function createPlan(
@@ -33,19 +32,22 @@ function createPlan(
 ): BillingPlan {
   const targetMarkupMultiplier = getTargetMarkupMultiplier()
   const normalizedIncludedCredits = Math.max(0, Math.round(includedCredits))
-  const creditSellPriceUsdCents = Math.max(
+  const creditSellPriceUsdMicros = Math.max(
     1,
-    Math.round(PROVIDER_COST_USD_CENTS_PER_CREDIT * targetMarkupMultiplier),
+    Math.round(CREDIT_UNIT_USD_MICROS * targetMarkupMultiplier),
   )
+  const recommendedBaseMonthlyUsdMicros = normalizedIncludedCredits * creditSellPriceUsdMicros
 
   return {
     slug,
     basePriceId: basePriceId ?? null,
     overagePriceId: overagePriceId ?? null,
     includedCredits: normalizedIncludedCredits,
-    providerCostUsdCentsPerCredit: PROVIDER_COST_USD_CENTS_PER_CREDIT,
-    creditSellPriceUsdCents,
-    recommendedBaseMonthlyUsdCents: normalizedIncludedCredits * creditSellPriceUsdCents,
+    providerCostUsdMicrosPerCredit: CREDIT_UNIT_USD_MICROS,
+    creditSellPriceUsdMicros,
+    creditSellPriceUsdCents: creditSellPriceUsdMicros / 10_000,
+    recommendedBaseMonthlyUsdMicros,
+    recommendedBaseMonthlyUsdCents: Math.round(recommendedBaseMonthlyUsdMicros / 10_000),
     targetMarkupMultiplier,
   }
 }
@@ -53,19 +55,19 @@ function createPlan(
 const plans: Record<PlanSlug, BillingPlan> = {
   starter: createPlan(
     'starter',
-    readNumber(env.BILLING_INCLUDED_CREDITS_STARTER, 500),
+    readNumber(env.BILLING_INCLUDED_CREDITS_STARTER, 5_000),
     env.STRIPE_PRICE_STARTER_BASE,
     env.STRIPE_PRICE_STARTER_OVERAGE,
   ),
   growth: createPlan(
     'growth',
-    readNumber(env.BILLING_INCLUDED_CREDITS_GROWTH, 2000),
+    readNumber(env.BILLING_INCLUDED_CREDITS_GROWTH, 20_000),
     env.STRIPE_PRICE_GROWTH_BASE,
     env.STRIPE_PRICE_GROWTH_OVERAGE,
   ),
   scale: createPlan(
     'scale',
-    readNumber(env.BILLING_INCLUDED_CREDITS_SCALE, 10000),
+    readNumber(env.BILLING_INCLUDED_CREDITS_SCALE, 100_000),
     env.STRIPE_PRICE_SCALE_BASE,
     env.STRIPE_PRICE_SCALE_OVERAGE,
   ),

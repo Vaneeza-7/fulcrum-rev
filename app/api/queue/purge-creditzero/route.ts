@@ -5,9 +5,9 @@ import { prisma } from '@/lib/db'
 /**
  * POST /api/queue/purge-creditzero
  *
- * Deletes all leads that were paused (status = 'cancelled_creditzero')
- * while the tenant's credit balance was zero. Called by the CleanSlateModal
- * when the user chooses "Start Fresh."
+ * Legacy compatibility endpoint for historical `cancelled_creditzero` leads.
+ * Exact-cost billing no longer pauses leads on zero credits, so this route is
+ * only useful for cleaning up old data created before the metered-overage cutover.
  */
 export async function POST() {
   const { orgId } = await auth()

@@ -46,21 +46,21 @@ export async function GET(): Promise<NextResponse<IntegrityResponse>> {
     details.push({ signal: 'credits', status: 'RED', message: 'Billing is inactive or payment has failed.' })
   } else {
     const ratio =
-      billingSummary.billing.includedCredits > 0
-        ? billingSummary.billing.remainingIncludedCredits / billingSummary.billing.includedCredits
+      Number(billingSummary.billing.includedCredits) > 0
+        ? Number(billingSummary.billing.remainingCredits) / Number(billingSummary.billing.includedCredits)
         : 0
 
     if (ratio <= 0.2) {
       details.push({
         signal: 'credits',
         status: 'AMBER',
-        message: `${billingSummary.billing.remainingIncludedCredits.toFixed(2)} credits remaining before overage.`,
+        message: `${billingSummary.billing.remainingCredits} credits remaining before overage.`,
       })
     } else {
       details.push({
         signal: 'credits',
         status: 'GREEN',
-        message: `${billingSummary.billing.remainingIncludedCredits.toFixed(2)} credits remaining.`,
+        message: `${billingSummary.billing.remainingCredits} credits remaining.`,
       })
     }
   }
