@@ -51,6 +51,8 @@ Onboarding save routes remain for compatibility and call the same service-layer 
 - Stripe subscriptions are modeled through `TenantBillingAccount`
 - included and consumed credits are stored in `FulcrumCreditLedger`
 - webhook idempotency is stored in `StripeWebhookEvent`
+- `1 credit = 1 provider-cost cent`
+- customer pricing is derived from a single markup rule, default `3x`
 - billing summary API: `/api/billing/summary`
 - subscription checkout API: `/api/billing/checkout`
 - billing portal API: `/api/billing/portal`

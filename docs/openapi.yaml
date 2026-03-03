@@ -741,6 +741,14 @@ components:
           nullable: true
         includedCredits:
           type: number
+        providerCostUsdCentsPerCredit:
+          type: number
+        creditSellPriceUsdCents:
+          type: number
+        recommendedBaseMonthlyUsdCents:
+          type: integer
+        targetMarkupMultiplier:
+          type: number
         usedCredits:
           type: number
         remainingIncludedCredits:

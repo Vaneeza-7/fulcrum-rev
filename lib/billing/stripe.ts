@@ -5,7 +5,17 @@ import { getBillingPlan, getPlanSlugFromPriceId, isPlanSlug, type PlanSlug } fro
 import { grantIncludedCreditsForPeriod } from './ledger'
 
 const STRIPE_BASE_URL = 'https://api.stripe.com/v1'
-const STRIPE_USAGE_SCALE = 100
+
+interface StripePrice {
+  id: string
+  active?: boolean
+  unit_amount: number | null
+  unit_amount_decimal?: string | null
+  recurring?: {
+    interval?: string
+    usage_type?: string
+  } | null
+}
 
 function requireStripeSecretKey() {
   if (!env.STRIPE_SECRET_KEY) {
@@ -81,6 +91,52 @@ export function verifyStripeWebhookSignature(payload: string, signatureHeader: s
   }
 }
 
+function getStripePriceAmount(price: StripePrice) {
+  if (typeof price.unit_amount === 'number') return price.unit_amount
+
+  const decimalAmount = Number(price.unit_amount_decimal)
+  return Number.isFinite(decimalAmount) ? decimalAmount : null
+}
+
+async function getStripePrice(priceId: string) {
+  return stripeRequest<StripePrice>(`/prices/${priceId}`, undefined, { method: 'GET' })
+}
+
+async function validateStripePlanPricing(planSlug: PlanSlug) {
+  const plan = getBillingPlan(planSlug)
+  if (!plan.basePriceId || !plan.overagePriceId) {
+    throw new Error(`Stripe prices are not configured for plan ${planSlug}`)
+  }
+
+  const [basePrice, overagePrice] = await Promise.all([
+    getStripePrice(plan.basePriceId),
+    getStripePrice(plan.overagePriceId),
+  ])
+
+  const baseAmount = getStripePriceAmount(basePrice)
+  const overageAmount = getStripePriceAmount(overagePrice)
+
+  if (baseAmount !== plan.recommendedBaseMonthlyUsdCents) {
+    throw new Error(
+      `Stripe base price ${basePrice.id} is ${baseAmount} cents, expected ${plan.recommendedBaseMonthlyUsdCents} cents for ${planSlug}`,
+    )
+  }
+
+  if (overageAmount !== plan.creditSellPriceUsdCents) {
+    throw new Error(
+      `Stripe overage price ${overagePrice.id} is ${overageAmount} cents, expected ${plan.creditSellPriceUsdCents} cents for ${planSlug}`,
+    )
+  }
+
+  if (basePrice.recurring?.interval !== 'month' || basePrice.recurring?.usage_type === 'metered') {
+    throw new Error(`Stripe base price ${basePrice.id} must be a monthly non-metered recurring price`)
+  }
+
+  if (overagePrice.recurring?.interval !== 'month' || overagePrice.recurring?.usage_type !== 'metered') {
+    throw new Error(`Stripe overage price ${overagePrice.id} must be a monthly metered recurring price`)
+  }
+}
+
 export async function ensureStripeCustomerForTenant(input: {
   tenantId: string
   tenantName: string
@@ -132,6 +188,8 @@ export async function createStripeCheckoutSession(input: {
     throw new Error(`Stripe prices are not configured for plan ${input.planSlug}`)
   }
 
+  await validateStripePlanPricing(input.planSlug)
+
   const params = new URLSearchParams()
   params.set('mode', 'subscription')
   params.set('customer', customerId)
@@ -176,11 +234,11 @@ export async function reportStripeUsage(input: {
   timestamp: number
   idempotencyKey: string
 }) {
-  const scaledQuantity = Math.max(0, Math.round(input.quantity * STRIPE_USAGE_SCALE))
-  if (scaledQuantity === 0) return
+  const normalizedQuantity = Math.max(0, Math.round(input.quantity))
+  if (normalizedQuantity === 0) return
 
   const params = new URLSearchParams()
-  params.set('quantity', String(scaledQuantity))
+  params.set('quantity', String(normalizedQuantity))
   params.set('timestamp', String(input.timestamp))
   params.set('action', 'increment')
 

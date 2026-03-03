@@ -2,12 +2,18 @@ import { env } from '@/lib/config'
 
 export type PlanSlug = 'starter' | 'growth' | 'scale'
 
-interface BillingPlan {
+const PROVIDER_COST_USD_CENTS_PER_CREDIT = 1
+const DEFAULT_TARGET_MARKUP_MULTIPLIER = 3
+
+export interface BillingPlan {
   slug: PlanSlug
   basePriceId: string | null
   overagePriceId: string | null
   includedCredits: number
-  overageUsdPerCredit: number
+  providerCostUsdCentsPerCredit: number
+  creditSellPriceUsdCents: number
+  recommendedBaseMonthlyUsdCents: number
+  targetMarkupMultiplier: number
 }
 
 function readNumber(value: string | undefined, fallback: number) {
@@ -15,28 +21,54 @@ function readNumber(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function getTargetMarkupMultiplier() {
+  return readNumber(env.BILLING_TARGET_MARKUP_MULTIPLIER, DEFAULT_TARGET_MARKUP_MULTIPLIER)
+}
+
+function createPlan(
+  slug: PlanSlug,
+  includedCredits: number,
+  basePriceId: string | undefined,
+  overagePriceId: string | undefined,
+): BillingPlan {
+  const targetMarkupMultiplier = getTargetMarkupMultiplier()
+  const normalizedIncludedCredits = Math.max(0, Math.round(includedCredits))
+  const creditSellPriceUsdCents = Math.max(
+    1,
+    Math.round(PROVIDER_COST_USD_CENTS_PER_CREDIT * targetMarkupMultiplier),
+  )
+
+  return {
+    slug,
+    basePriceId: basePriceId ?? null,
+    overagePriceId: overagePriceId ?? null,
+    includedCredits: normalizedIncludedCredits,
+    providerCostUsdCentsPerCredit: PROVIDER_COST_USD_CENTS_PER_CREDIT,
+    creditSellPriceUsdCents,
+    recommendedBaseMonthlyUsdCents: normalizedIncludedCredits * creditSellPriceUsdCents,
+    targetMarkupMultiplier,
+  }
+}
+
 const plans: Record<PlanSlug, BillingPlan> = {
-  starter: {
-    slug: 'starter',
-    basePriceId: env.STRIPE_PRICE_STARTER_BASE ?? null,
-    overagePriceId: env.STRIPE_PRICE_STARTER_OVERAGE ?? null,
-    includedCredits: readNumber(env.BILLING_INCLUDED_CREDITS_STARTER, 500),
-    overageUsdPerCredit: readNumber(env.BILLING_OVERAGE_USD_PER_CREDIT_STARTER, 0.5),
-  },
-  growth: {
-    slug: 'growth',
-    basePriceId: env.STRIPE_PRICE_GROWTH_BASE ?? null,
-    overagePriceId: env.STRIPE_PRICE_GROWTH_OVERAGE ?? null,
-    includedCredits: readNumber(env.BILLING_INCLUDED_CREDITS_GROWTH, 2000),
-    overageUsdPerCredit: readNumber(env.BILLING_OVERAGE_USD_PER_CREDIT_GROWTH, 0.4),
-  },
-  scale: {
-    slug: 'scale',
-    basePriceId: env.STRIPE_PRICE_SCALE_BASE ?? null,
-    overagePriceId: env.STRIPE_PRICE_SCALE_OVERAGE ?? null,
-    includedCredits: readNumber(env.BILLING_INCLUDED_CREDITS_SCALE, 10000),
-    overageUsdPerCredit: readNumber(env.BILLING_OVERAGE_USD_PER_CREDIT_SCALE, 0.3),
-  },
+  starter: createPlan(
+    'starter',
+    readNumber(env.BILLING_INCLUDED_CREDITS_STARTER, 500),
+    env.STRIPE_PRICE_STARTER_BASE,
+    env.STRIPE_PRICE_STARTER_OVERAGE,
+  ),
+  growth: createPlan(
+    'growth',
+    readNumber(env.BILLING_INCLUDED_CREDITS_GROWTH, 2000),
+    env.STRIPE_PRICE_GROWTH_BASE,
+    env.STRIPE_PRICE_GROWTH_OVERAGE,
+  ),
+  scale: createPlan(
+    'scale',
+    readNumber(env.BILLING_INCLUDED_CREDITS_SCALE, 10000),
+    env.STRIPE_PRICE_SCALE_BASE,
+    env.STRIPE_PRICE_SCALE_OVERAGE,
+  ),
 }
 
 export function getBillingPlan(planSlug: PlanSlug): BillingPlan {

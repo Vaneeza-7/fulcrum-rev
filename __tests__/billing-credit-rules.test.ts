@@ -6,30 +6,34 @@ import {
 } from '@/lib/billing/credit-rules'
 
 describe('billing credit rules', () => {
-  it('returns the normalized discovery charge', () => {
+  it('maps discovery credits directly to normalized provider cost cents', () => {
     expect(getDiscoveryUsageCharge()).toEqual({
-      credits: 1,
+      credits: 25,
       usdAmountCents: 25,
     })
   })
 
-  it('calculates enrichment usd spend from token usage', () => {
+  it('maps enrichment credits directly to normalized provider cost cents', () => {
     const charge = getEnrichmentUsageCharge({
       inputTokens: 1000,
       outputTokens: 500,
     })
 
-    expect(charge.credits).toBe(0.35)
-    expect(charge.usdAmountCents).toBeGreaterThan(0)
+    expect(charge).toEqual({
+      credits: 7,
+      usdAmountCents: 7,
+    })
   })
 
-  it('calculates first-line usd spend from token usage', () => {
+  it('maps first-line credits directly to normalized provider cost cents', () => {
     const charge = getFirstLineUsageCharge({
       inputTokens: 250,
       outputTokens: 120,
     })
 
-    expect(charge.credits).toBe(0.15)
-    expect(charge.usdAmountCents).toBeGreaterThan(0)
+    expect(charge).toEqual({
+      credits: 1,
+      usdAmountCents: 1,
+    })
   })
 })

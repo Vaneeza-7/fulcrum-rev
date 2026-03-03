@@ -41,12 +41,10 @@ const envSchema = z.object({
   STRIPE_PRICE_GROWTH_OVERAGE: z.string().optional(),
   STRIPE_PRICE_SCALE_BASE: z.string().optional(),
   STRIPE_PRICE_SCALE_OVERAGE: z.string().optional(),
+  BILLING_TARGET_MARKUP_MULTIPLIER: z.string().optional(),
   BILLING_INCLUDED_CREDITS_STARTER: z.string().optional(),
   BILLING_INCLUDED_CREDITS_GROWTH: z.string().optional(),
   BILLING_INCLUDED_CREDITS_SCALE: z.string().optional(),
-  BILLING_OVERAGE_USD_PER_CREDIT_STARTER: z.string().optional(),
-  BILLING_OVERAGE_USD_PER_CREDIT_GROWTH: z.string().optional(),
-  BILLING_OVERAGE_USD_PER_CREDIT_SCALE: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().min(32).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });

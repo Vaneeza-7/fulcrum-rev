@@ -84,13 +84,13 @@ STRIPE_PRICE_GROWTH_BASE=
 STRIPE_PRICE_GROWTH_OVERAGE=
 STRIPE_PRICE_SCALE_BASE=
 STRIPE_PRICE_SCALE_OVERAGE=
+BILLING_TARGET_MARKUP_MULTIPLIER=3
 BILLING_INCLUDED_CREDITS_STARTER=
 BILLING_INCLUDED_CREDITS_GROWTH=
 BILLING_INCLUDED_CREDITS_SCALE=
-BILLING_OVERAGE_USD_PER_CREDIT_STARTER=
-BILLING_OVERAGE_USD_PER_CREDIT_GROWTH=
-BILLING_OVERAGE_USD_PER_CREDIT_SCALE=
 ```
+
+`BILLING_INCLUDED_CREDITS_*` now represent included provider-cost credits, where `1 credit = 1 provider-cost cent`.
 
 ## Discovery Providers
 
@@ -106,6 +106,9 @@ More detail: `docs/DISCOVERY-PROVIDERS.md`
 - Stripe subscriptions support `starter`, `growth`, and `scale`.
 - Monthly included credits are granted into `FulcrumCreditLedger`.
 - Usage from discovery, enrichment, and first-line generation writes negative ledger entries.
+- Each usage entry consumes credits equal to the normalized provider cost in cents.
+- Customer billing is derived from a single markup rule: `BILLING_TARGET_MARKUP_MULTIPLIER`, default `3`.
+- Stripe checkout validates that configured Stripe prices match the derived 3x pricing before creating a subscription.
 - Metered overage is synced by `/api/cron/billing-sync`.
 
 More detail: `docs/BILLING.md`
