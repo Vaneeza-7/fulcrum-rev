@@ -15,8 +15,8 @@ export default function SignInPage() {
           <SignIn
             routing="hash"
             signUpUrl="/sign-up"
-            fallbackRedirectUrl="/"
-            forceRedirectUrl="/"
+            fallbackRedirectUrl="/auth/continue"
+            forceRedirectUrl="/auth/continue"
           />
         </div>
       </div>
