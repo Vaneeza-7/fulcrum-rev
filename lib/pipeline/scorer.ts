@@ -142,6 +142,7 @@ export async function scoreLead(
           type: s.signal_type,
           raw_score: multiplier > 0 ? s.signal_score / multiplier : s.signal_score,
           decayed_score: s.signal_score,
+          days_ago: s.days_ago,
         };
       }),
     },
