@@ -12,6 +12,8 @@ export interface CRMLeadData {
   intent_score: number;
   first_line: string;
   source: string;
+  /** CRM-specific lead status / stage (e.g. Zoho Lead_Status). */
+  lead_status?: string;
 }
 
 export interface CRMDeal {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CRMFactory } from '@/lib/crm/factory';
-import { ZohoConnector } from '@/lib/crm/zoho-connector';
+import { ZohoConnector, mapScoreToZohoLeadStatus } from '@/lib/crm/zoho-connector';
 import { HubSpotConnector } from '@/lib/crm/hubspot-connector';
 import { SalesforceConnector } from '@/lib/crm/salesforce-connector';
 import type { CRMAuthConfig } from '@/lib/crm/types';
@@ -137,5 +137,61 @@ describe('Zoho connector field mapping', () => {
     expect(mapped.Last_Name).toBe('Doe');
     expect(mapped.Company).toBe('EdTech Co');
     expect(mapped.Designation).toBe('Superintendent');
+  });
+
+  it('maps lead_status to Lead_Status', () => {
+    const connector = new ZohoConnector(mockConfig);
+    const mapped = connector.mapFields({
+      first_name: 'John',
+      last_name: 'Smith',
+      company: 'Acme',
+      title: 'CEO',
+      linkedin_url: 'https://linkedin.com/in/johnsmith',
+      fulcrum_score: 85,
+      fulcrum_grade: 'A',
+      fit_score: 30,
+      intent_score: 50,
+      first_line: 'Impressive revenue growth.',
+      source: 'Fulcrum',
+      lead_status: 'Sales-Ready',
+    });
+
+    expect(mapped.Lead_Status).toBe('Sales-Ready');
+  });
+});
+
+describe('mapScoreToZohoLeadStatus', () => {
+  it('returns "New" for Grade D leads (score 0-39)', () => {
+    expect(mapScoreToZohoLeadStatus(0)).toBe('New');
+    expect(mapScoreToZohoLeadStatus(20)).toBe('New');
+    expect(mapScoreToZohoLeadStatus(39)).toBe('New');
+  });
+
+  it('returns "Working" for Grade C leads (score 40-59)', () => {
+    expect(mapScoreToZohoLeadStatus(40)).toBe('Working');
+    expect(mapScoreToZohoLeadStatus(50)).toBe('Working');
+    expect(mapScoreToZohoLeadStatus(59)).toBe('Working');
+  });
+
+  it('returns "Nurturing" for Grade B leads (score 60-79)', () => {
+    expect(mapScoreToZohoLeadStatus(60)).toBe('Nurturing');
+    expect(mapScoreToZohoLeadStatus(70)).toBe('Nurturing');
+    expect(mapScoreToZohoLeadStatus(79)).toBe('Nurturing');
+  });
+
+  it('returns "Sales-Ready" for Grade A/A+ leads (score 80-100)', () => {
+    expect(mapScoreToZohoLeadStatus(80)).toBe('Sales-Ready');
+    expect(mapScoreToZohoLeadStatus(90)).toBe('Sales-Ready');
+    expect(mapScoreToZohoLeadStatus(100)).toBe('Sales-Ready');
+  });
+
+  it('follows the progression New → Working → Nurturing → Sales-Ready', () => {
+    const stages = [
+      mapScoreToZohoLeadStatus(10),
+      mapScoreToZohoLeadStatus(45),
+      mapScoreToZohoLeadStatus(65),
+      mapScoreToZohoLeadStatus(85),
+    ];
+    expect(stages).toEqual(['New', 'Working', 'Nurturing', 'Sales-Ready']);
   });
 });

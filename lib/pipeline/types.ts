@@ -24,7 +24,7 @@ export interface ScoreResult {
     industry_pts: number;
     revenue_pts: number;
     role_pts: number;
-    signals: Array<{ type: string; raw_score: number; decayed_score: number }>;
+    signals: Array<{ type: string; raw_score: number; decayed_score: number; days_ago: number }>;
   };
 }
 
