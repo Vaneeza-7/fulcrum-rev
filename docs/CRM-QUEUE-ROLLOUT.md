@@ -73,6 +73,8 @@ curl -X POST \
   "https://revops.fulcrumcollective.io/api/cron/crm-push?tenantId=<pilot-tenant-id>"
 ```
 
+If production is running on a Vercel scope that only allows daily cron jobs, use the manual signed cron call above for pilot validation and ad hoc queue drains until the project is upgraded.
+
 ## 6. Pilot Validation Checklist
 
 Validate the pilot before expanding the allowlist:

@@ -128,11 +128,11 @@ CRM activity and observability live inside `/leads`, backed by:
 | Path | Schedule (UTC) |
 | --- | --- |
 | `/api/cron/pipeline` | `0 10 * * 1-5` |
-| `/api/cron/crm-push` | `*/5 * * * *` |
+| `/api/cron/crm-push` | `30 10 * * 1-5` |
 | `/api/cron/roi-sync` | `0 2 * * *` |
 | `/api/cron/hitl-recalibrate` | `0 3 * * *` |
 | `/api/cron/cold-start-check` | `0 0 * * *` |
-| `/api/cron/health` | `*/15 * * * *` |
+| `/api/cron/health` | `0 11 * * 1-5` |
 | `/api/cron/billing-sync` | `0 1 * * *` |
 
 ## Verification Status
