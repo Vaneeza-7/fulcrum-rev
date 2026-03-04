@@ -164,6 +164,10 @@ export function Step4DeliveryClient({
         description="Choose how and when you want to receive your qualified leads."
       />
 
+      <p className="mb-3 text-xs text-gray-500">
+        Fields marked <span className="text-red-400">*</span> are required.
+      </p>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Section A: Volume & Schedule */}
         <div className="rounded-xl bg-gray-900 border border-gray-800 p-6 space-y-5">
@@ -248,7 +252,9 @@ export function Step4DeliveryClient({
 
         {/* Section B: Delivery Channels */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-white uppercase tracking-wide">Delivery Channels</h3>
+          <h3 className="text-sm font-semibold text-white uppercase tracking-wide">
+            Delivery Channels <span className="text-red-400">*</span>
+          </h3>
 
           {/* CRM Integration */}
           <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">

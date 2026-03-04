@@ -61,6 +61,17 @@ export function Step2ICPClient({ initialData }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    if (targetIndustries.length === 0) {
+      setError('Please select at least one target industry.')
+      return
+    }
+
+    if (targetRoles.length === 0) {
+      setError('Please add at least one decision maker.')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
@@ -100,10 +111,16 @@ export function Step2ICPClient({ initialData }: Props) {
         description="The more specific you are, the more accurate your leads will be."
       />
 
+      <p className="mb-3 text-xs text-gray-500">
+        Fields marked <span className="text-red-400">*</span> are required.
+      </p>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Target Industries */}
         <div className="rounded-xl bg-gray-900 border border-gray-800 p-6">
-          <label className="block text-sm font-medium text-gray-300 mb-3">Target industries</label>
+          <label className="block text-sm font-medium text-gray-300 mb-3">
+            Target industries <span className="text-red-400">*</span>
+          </label>
           <div className="grid grid-cols-2 gap-2">
             {TARGET_INDUSTRIES.map((ind) => (
               <button
@@ -165,7 +182,9 @@ export function Step2ICPClient({ initialData }: Props) {
         {/* Decision Makers & Geography */}
         <div className="rounded-xl bg-gray-900 border border-gray-800 p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Decision makers</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              Decision makers <span className="text-red-400">*</span>
+            </label>
             <TagInput
               value={targetRoles}
               onChange={setTargetRoles}
@@ -229,7 +248,7 @@ export function Step2ICPClient({ initialData }: Props) {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || targetIndustries.length === 0 || targetRoles.length === 0}
           className="w-full rounded-lg bg-brand-cyan px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-cyan/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Saving...' : 'Continue'}

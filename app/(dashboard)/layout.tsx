@@ -26,10 +26,8 @@ export default async function DashboardLayout({
   }
 
   if (!orgId) {
-    if (userId) {
-      redirect('/auth/continue')
-    }
-    // Not signed in — render children so the page-level fallback UI can show.
+    // Signed in but no org and signed out users should still be able to render
+    // page-level fallback UI (including the landing page on `/`).
     return <>{children}</>
   }
 

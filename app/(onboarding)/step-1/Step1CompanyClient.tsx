@@ -77,6 +77,10 @@ export function Step1CompanyClient({ existingName }: Props) {
         description="Tell us about your business so we can find your ideal customers."
       />
 
+      <p className="mb-3 text-xs text-gray-500">
+        Fields marked <span className="text-red-400">*</span> are required.
+      </p>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Company Basics */}
         <div className="rounded-xl bg-gray-900 border border-gray-800 p-6 space-y-4">
