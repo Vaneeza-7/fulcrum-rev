@@ -221,6 +221,113 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/leads/{id}/crm-push-events:
+    get:
+      tags: [Leads]
+      summary: Get recent CRM push events for one tenant lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Recent lead CRM activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leadId:
+                    type: string
+                    format: uuid
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CrmPushEvent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/crm/push-events:
+    get:
+      tags: [CRM]
+      summary: List tenant CRM push events
+      parameters:
+        - in: query
+          name: leadId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: outcome
+          schema:
+            type: string
+            enum: [created, matched_existing, duplicate_detected, auth_failed, validation_failed, transient_failed, other]
+        - in: query
+          name: errorCode
+          schema:
+            type: string
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [24h, 7d, 30d]
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Paginated tenant CRM activity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmPushEventFeed'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/crm/push-events/summary:
+    get:
+      tags: [CRM]
+      summary: Get tenant CRM push event summary
+      parameters:
+        - in: query
+          name: window
+          schema:
+            type: string
+            enum: [24h, 7d, 30d]
+      responses:
+        '200':
+          description: Tenant CRM activity summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmPushEventSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/usage/summary:
     get:
       tags: [Usage]
@@ -848,6 +955,142 @@ components:
           type: string
         count:
           type: integer
+    CrmPushEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        leadId:
+          type: string
+          format: uuid
+        leadName:
+          type: string
+        company:
+          type: string
+          nullable: true
+        connector:
+          type: string
+        outcome:
+          type: string
+          enum: [created, matched_existing, duplicate_detected, auth_failed, validation_failed, transient_failed, other]
+        rawOutcome:
+          type: string
+        crmObjectId:
+          type: string
+          nullable: true
+        attemptNumber:
+          type: integer
+        errorCode:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          properties:
+            stage:
+              type: string
+              enum: [preflight, push]
+            rawError:
+              type: string
+            retry:
+              type: integer
+            source:
+              type: string
+              enum: [cron]
+            duplicateHint:
+              type: string
+              nullable: true
+    CrmPushEventFeed:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        filters:
+          type: object
+          properties:
+            leadId:
+              type: string
+              format: uuid
+              nullable: true
+            outcome:
+              type: string
+              enum: [created, matched_existing, duplicate_detected, auth_failed, validation_failed, transient_failed, other]
+              nullable: true
+            errorCode:
+              type: string
+              nullable: true
+            window:
+              type: string
+              enum: [24h, 7d, 30d]
+            q:
+              type: string
+              nullable: true
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrmPushEvent'
+    CrmPushEventSummary:
+      type: object
+      properties:
+        window:
+          type: string
+          enum: [24h, 7d, 30d]
+        totals:
+          type: object
+          properties:
+            created:
+              type: integer
+            duplicates:
+              type: integer
+            authFailed:
+              type: integer
+            validationFailed:
+              type: integer
+            transientFailed:
+              type: integer
+            matchedExisting:
+              type: integer
+            other:
+              type: integer
+        duplicateRate:
+          type: string
+        oldestFailedMinutes:
+          type: integer
+          nullable: true
+        topDuplicateLeads:
+          type: array
+          items:
+            type: object
+            properties:
+              leadId:
+                type: string
+                format: uuid
+              leadName:
+                type: string
+              company:
+                type: string
+                nullable: true
+              duplicateCount:
+                type: integer
+        recentDuplicates:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrmPushEvent'
     SearchQuery:
       allOf:
         - $ref: '#/components/schemas/SearchQueryInput'

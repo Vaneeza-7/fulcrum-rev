@@ -10,13 +10,15 @@ vi.mock('@/lib/db', () => ({
       count: vi.fn(),
       findFirst: vi.fn(),
     },
-    crmPushEvent: {
-      count: vi.fn(),
-    },
   },
 }))
 
+vi.mock('@/lib/crm/push-events-service', () => ({
+  getTenantCrmPushEventSummary: vi.fn(),
+}))
+
 import { prisma } from '@/lib/db'
+import { getTenantCrmPushEventSummary } from '@/lib/crm/push-events-service'
 import {
   evaluateAndMaybePauseTenantCrmPush,
   getTenantCrmHealthSummary,
@@ -40,7 +42,22 @@ describe('crm push health', () => {
     vi.mocked(prisma.lead.findFirst)
       .mockResolvedValueOnce({ crmPushQueuedAt: new Date(Date.now() - 5 * 60_000) } as any)
       .mockResolvedValueOnce(null as any)
-    vi.mocked(prisma.crmPushEvent.count).mockResolvedValueOnce(10).mockResolvedValueOnce(0)
+    vi.mocked(getTenantCrmPushEventSummary).mockResolvedValue({
+      window: '30d',
+      totals: {
+        created: 10,
+        duplicates: 0,
+        authFailed: 0,
+        validationFailed: 0,
+        transientFailed: 0,
+        matchedExisting: 0,
+        other: 0,
+      },
+      duplicateRate: '0.00',
+      oldestFailedMinutes: null,
+      topDuplicateLeads: [],
+      recentDuplicates: [],
+    } as any)
 
     const result = await getTenantCrmHealthSummary('tenant-1')
 
@@ -59,7 +76,22 @@ describe('crm push health', () => {
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0)
     vi.mocked(prisma.lead.findFirst).mockResolvedValueOnce(null as any).mockResolvedValueOnce(null as any)
-    vi.mocked(prisma.crmPushEvent.count).mockResolvedValueOnce(100).mockResolvedValueOnce(1)
+    vi.mocked(getTenantCrmPushEventSummary).mockResolvedValue({
+      window: '30d',
+      totals: {
+        created: 100,
+        duplicates: 1,
+        authFailed: 0,
+        validationFailed: 0,
+        transientFailed: 0,
+        matchedExisting: 0,
+        other: 0,
+      },
+      duplicateRate: '1.00',
+      oldestFailedMinutes: null,
+      topDuplicateLeads: [],
+      recentDuplicates: [],
+    } as any)
 
     const result = await getTenantCrmHealthSummary('tenant-1')
 
@@ -72,7 +104,22 @@ describe('crm push health', () => {
       crmPushPaused: false,
     } as any)
     vi.mocked(prisma.lead.count).mockResolvedValueOnce(10)
-    vi.mocked(prisma.crmPushEvent.count).mockResolvedValueOnce(0).mockResolvedValueOnce(0)
+    vi.mocked(getTenantCrmPushEventSummary).mockResolvedValue({
+      window: '7d',
+      totals: {
+        created: 0,
+        duplicates: 0,
+        authFailed: 0,
+        validationFailed: 0,
+        transientFailed: 0,
+        matchedExisting: 0,
+        other: 0,
+      },
+      duplicateRate: '0.00',
+      oldestFailedMinutes: null,
+      topDuplicateLeads: [],
+      recentDuplicates: [],
+    } as any)
     vi.mocked(prisma.tenant.update).mockResolvedValue({
       crmPushPaused: true,
       crmPushPauseReason: 'CRM push paused because too many approved leads have been failing for more than 30 minutes.',
@@ -94,5 +141,41 @@ describe('crm push health', () => {
         }),
       }),
     )
+  })
+
+  it('auto-pauses tenants when duplicate creation risk exceeds the threshold', async () => {
+    vi.mocked(prisma.tenant.findUniqueOrThrow).mockResolvedValue({
+      crmPushPaused: false,
+    } as any)
+    vi.mocked(prisma.lead.count).mockResolvedValueOnce(0)
+    vi.mocked(getTenantCrmPushEventSummary).mockResolvedValue({
+      window: '7d',
+      totals: {
+        created: 100,
+        duplicates: 2,
+        authFailed: 0,
+        validationFailed: 0,
+        transientFailed: 0,
+        matchedExisting: 0,
+        other: 0,
+      },
+      duplicateRate: '2.00',
+      oldestFailedMinutes: null,
+      topDuplicateLeads: [],
+      recentDuplicates: [],
+    } as any)
+    vi.mocked(prisma.tenant.update).mockResolvedValue({
+      crmPushPaused: true,
+      crmPushPauseReason: 'CRM push paused because duplicate creation risk exceeded the safe threshold.',
+      crmPushPausedAt: new Date('2026-03-04T15:00:00.000Z'),
+    } as any)
+
+    const result = await evaluateAndMaybePauseTenantCrmPush('tenant-1')
+
+    expect(result).toEqual({
+      paused: true,
+      changed: true,
+      reason: 'CRM push paused because duplicate creation risk exceeded the safe threshold.',
+    })
   })
 })

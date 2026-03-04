@@ -7,6 +7,7 @@ import {
   runCrmPreflight,
   type CrmPushFailureCode,
 } from '@/lib/crm/preflight'
+import type { CrmPushEventMetadata } from '@/lib/crm/push-events'
 
 const log = jobLogger('crm_push')
 const MAX_RETRIES = 3
@@ -30,7 +31,7 @@ async function createCrmPushEvent(input: {
   crmObjectId?: string | null
   errorCode?: string | null
   errorMessage?: string | null
-  metadata?: Record<string, unknown>
+  metadata?: CrmPushEventMetadata
 }) {
   await prisma.crmPushEvent.create({
     data: {
@@ -145,7 +146,12 @@ export async function pushLeadToCRM(leadId: string): Promise<PushLeadResult> {
       attemptNumber,
       errorCode,
       errorMessage: message,
-      metadata: { stage: 'preflight' },
+      metadata: {
+        stage: 'preflight',
+        retry: 0,
+        source: 'cron',
+        duplicateHint: null,
+      },
     })
 
     return { success: false, error: message, outcome: errorCode }
@@ -154,8 +160,10 @@ export async function pushLeadToCRM(leadId: string): Promise<PushLeadResult> {
   const crm = CRMFactory.create(preflight.connector, preflight.crmConfig)
   const crmLeadData = buildCrmLeadData(lead, lead.tenant.name)
   let lastError: unknown = null
+  let lastRetry = 0
 
   for (let retry = 1; retry <= MAX_RETRIES; retry++) {
+    lastRetry = retry
     try {
       await crm.authenticate()
       const crmLeadId = await crm.createLead(crmLeadData)
@@ -179,6 +187,12 @@ export async function pushLeadToCRM(leadId: string): Promise<PushLeadResult> {
         outcome: 'created',
         attemptNumber,
         crmObjectId: crmLeadId,
+        metadata: {
+          stage: 'push',
+          retry,
+          source: 'cron',
+          duplicateHint: null,
+        },
       })
 
       await auditLog(lead.tenantId, 'lead_pushed_to_crm', leadId, {
@@ -215,7 +229,11 @@ export async function pushLeadToCRM(leadId: string): Promise<PushLeadResult> {
     errorCode: humanized.errorCode,
     errorMessage: humanized.message,
     metadata: {
+      stage: 'push',
       rawError: lastError instanceof Error ? lastError.message : String(lastError),
+      retry: lastRetry,
+      source: 'cron',
+      duplicateHint: humanized.duplicate ? humanized.message : null,
     },
   })
 

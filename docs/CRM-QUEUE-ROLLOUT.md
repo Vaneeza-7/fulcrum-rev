@@ -25,6 +25,16 @@ npx prisma migrate deploy
 
 This rollout does not require a new schema migration beyond `20260303194500_core_launch_hardening`.
 
+## 2a. Pre-activation Readiness
+
+Before pilot activation:
+
+- confirm `/api/cron/crm-push` is present in the deployed `vercel.json`
+- confirm `CRON_SECRET` is set in production
+- confirm the pilot tenant is the only UUID in `CORE_LAUNCH_TENANT_IDS`
+- confirm the pilot tenant CRM credentials and mappings are valid in `/settings`
+- confirm `/api/system/integrity` is reachable after deploy
+
 ## 3. Pilot Backfill Dry Run
 
 Preview the legacy lead state changes before writing anything:
@@ -70,6 +80,9 @@ Validate the pilot before expanding the allowlist:
 - previously approved leads were converted to `queued`, `failed`, or `succeeded` correctly
 - failed leads show the correct CRM preflight error in `/leads`
 - queue processing creates CRM records and moves leads to `pushed_to_crm`
+- `/leads` CRM Activity shows recent created, duplicate, auth, validation, and transient outcomes
+- duplicate diagnostics on `/leads` match the recent `crm_push_events` mix
+- expanded lead cards show recent CRM activity for retried or pushed leads
 - `/api/system/integrity` and the dashboard show healthy or explainable CRM status
 - no unexpected duplicate spike appears in `crm_push_events`
 
@@ -115,6 +128,7 @@ npm run crm:unpause-tenant -- --tenantId <tenant-id>
 
 - Use `Retry Failed Pushes` on `/leads` for tenant-wide retry
 - Use `Retry CRM Push` in an expanded lead row for a single lead
+- Use `CRM Activity` on `/leads` to inspect the affected lead history before retrying duplicate or auth failures
 
 ### Retry failed leads from CLI
 
@@ -130,3 +144,9 @@ Rollback is operational, not schema-based.
 - Pause affected tenants from `/leads` or with operator tooling
 - Do not revert the schema migration
 - Re-run targeted backfill or retry commands only after the CRM configuration problem is fixed
+
+## 11. Expansion Guardrails
+
+- never expand the allowlist until the pilot tenant is stable
+- never clear `CORE_LAUNCH_TENANT_IDS` accidentally during rollout
+- use `/leads` CRM Activity and `/api/system/integrity` together when validating duplicate spikes or stale failures

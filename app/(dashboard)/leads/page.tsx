@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
+import { getTenantCrmPushEventSummary, listTenantCrmPushEvents } from '@/lib/crm/push-events-service'
 import { LeadsClient } from './LeadsClient'
 import { getTenantIntegritySummary } from '@/lib/integrity/tenant-integrity'
 
@@ -81,6 +82,21 @@ export default async function LeadsPage({
     getTenantIntegritySummary(tenant.id),
   ])
 
+  const [crmActivitySummary, crmActivityFeed] = await Promise.all([
+    getTenantCrmPushEventSummary({
+      tenantId: tenant.id,
+      window: '7d',
+    }),
+    listTenantCrmPushEvents({
+      tenantId: tenant.id,
+      filters: {
+        window: '7d',
+      },
+      page: 1,
+      pageSize: 25,
+    }),
+  ])
+
   const serialized = leads.map((lead) => ({
     ...lead,
     fulcrumScore: Number(lead.fulcrumScore),
@@ -96,6 +112,8 @@ export default async function LeadsPage({
       initialLeads={serialized}
       crmType={tenant.crmType}
       crmHealth={integrity.crmHealth}
+      initialCrmActivitySummary={crmActivitySummary}
+      initialCrmActivityFeed={crmActivityFeed}
       initialView={resolveInitialView(resolvedSearchParams)}
     />
   )

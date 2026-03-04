@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { getTenantCrmPushEventSummary } from '@/lib/crm/push-events-service'
 import type { IntegrityStatus } from '@/lib/types/integrity'
 
 export interface TenantCrmHealthSummary {
@@ -16,11 +17,6 @@ export interface TenantCrmHealthSummary {
 function minutesSince(date: Date | null | undefined) {
   if (!date) return null
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000))
-}
-
-function formatDuplicateRate(duplicates: number, total: number) {
-  if (total <= 0) return '0.00'
-  return ((duplicates / total) * 100).toFixed(2)
 }
 
 function buildMessage(summary: Omit<TenantCrmHealthSummary, 'message' | 'action'> & { crmLabel: string }) {
@@ -73,7 +69,7 @@ function crmLabel(crmType: string | null | undefined) {
 
 export async function getTenantCrmHealthSummary(tenantId: string): Promise<TenantCrmHealthSummary> {
   const now = new Date()
-  const [tenant, queuedCount, failedCount, queuedOlderThan15, failedOlderThan15, oldestQueued, oldestFailed, totals30d, duplicate30d] = await Promise.all([
+  const [tenant, queuedCount, failedCount, queuedOlderThan15, failedOlderThan15, oldestQueued, oldestFailed, summary30d] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
       select: {
@@ -130,23 +126,13 @@ export async function getTenantCrmHealthSummary(tenantId: string): Promise<Tenan
       orderBy: { updatedAt: 'asc' },
       select: { updatedAt: true },
     }),
-    prisma.crmPushEvent.count({
-      where: {
-        tenantId,
-        createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60_000) },
-        outcome: { in: ['created', 'matched_existing', 'duplicate_detected'] },
-      },
-    }),
-    prisma.crmPushEvent.count({
-      where: {
-        tenantId,
-        createdAt: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60_000) },
-        outcome: 'duplicate_detected',
-      },
+    getTenantCrmPushEventSummary({
+      tenantId,
+      window: '30d',
     }),
   ])
 
-  const duplicateRate30d = formatDuplicateRate(duplicate30d, totals30d)
+  const duplicateRate30d = summary30d.duplicateRate
 
   let level: IntegrityStatus = 'GREEN'
   if (tenant.crmPushPaused || failedOlderThan15 >= 5 || Number(duplicateRate30d) >= 0.5) {
@@ -183,7 +169,7 @@ export async function getTenantCrmHealthSummary(tenantId: string): Promise<Tenan
 
 export async function evaluateAndMaybePauseTenantCrmPush(tenantId: string) {
   const now = new Date()
-  const [tenant, oldFailedCount, duplicateCount7d, totalCount7d] = await Promise.all([
+  const [tenant, oldFailedCount, summary7d] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
       select: {
@@ -198,23 +184,14 @@ export async function evaluateAndMaybePauseTenantCrmPush(tenantId: string) {
         updatedAt: { lt: new Date(now.getTime() - 30 * 60_000) },
       },
     }),
-    prisma.crmPushEvent.count({
-      where: {
-        tenantId,
-        createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60_000) },
-        outcome: 'duplicate_detected',
-      },
-    }),
-    prisma.crmPushEvent.count({
-      where: {
-        tenantId,
-        createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60_000) },
-        outcome: { in: ['created', 'matched_existing', 'duplicate_detected'] },
-      },
+    getTenantCrmPushEventSummary({
+      tenantId,
+      window: '7d',
     }),
   ])
 
-  const duplicateRate7d = totalCount7d > 0 ? (duplicateCount7d / totalCount7d) * 100 : 0
+  const duplicateRate7d = Number(summary7d.duplicateRate)
+  const duplicateCount7d = summary7d.totals.duplicates
   const shouldPause = (duplicateCount7d >= 2 && duplicateRate7d >= 0.5) || oldFailedCount >= 10
 
   if (!shouldPause || tenant.crmPushPaused) {

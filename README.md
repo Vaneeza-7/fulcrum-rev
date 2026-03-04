@@ -5,6 +5,7 @@ Fulcrum Rev is a multi-tenant RevOps engine built on Next.js, Prisma, Neon, Cler
 ## Current Product Surface
 
 - Dashboard routes: `/`, `/leads`, `/usage`, `/settings`
+- `/leads` now includes CRM queue controls, CRM activity history, and duplicate diagnostics
 - Onboarding routes: `/step-1` through `/step-6`
 - Settings APIs: `/api/settings/*`
 - Discovery providers: `Instantly` primary, `Apify` fallback
@@ -115,6 +116,12 @@ More detail: `docs/DISCOVERY-PROVIDERS.md`
 More detail: `docs/BILLING.md`
 
 CRM queue rollout and recovery: `docs/CRM-QUEUE-ROLLOUT.md`
+
+CRM activity and observability live inside `/leads`, backed by:
+
+- `GET /api/crm/push-events`
+- `GET /api/crm/push-events/summary`
+- `GET /api/leads/{id}/crm-push-events`
 
 ## Cron Schedule
 
