@@ -10,13 +10,17 @@ export const metadata = {
 
 export default async function Step1Page() {
   let orgId: string | null | undefined = null
+  let userId: string | null | undefined = null
   try {
     const session = await auth()
     orgId = session.orgId
+    userId = session.userId
   } catch {
     // Clerk not configured
   }
-  if (!orgId) redirect('/')
+  if (!orgId) {
+    redirect(userId ? '/auth/continue' : '/')
+  }
 
   let tenant: Awaited<ReturnType<typeof prisma.tenant.findUnique>> & { profile?: unknown } | null = null
   try {

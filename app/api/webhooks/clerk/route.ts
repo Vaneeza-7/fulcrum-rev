@@ -1,11 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { Webhook } from 'svix';
 import { prisma } from '@/lib/db';
 import { initializeColdStart } from '@/lib/cold-start';
 import { clerkWebhookSchema } from '@/lib/validation/schemas';
 import { routeLogger } from '@/lib/logger';
+import { resolveUniqueTenantSlug } from '@/lib/tenants/slug';
 
 const log = routeLogger('/api/webhooks/clerk');
+
+async function createOrUpdateTenantFromClerkOrg(data: { id: string; name?: string | null; slug?: string | null }) {
+  const existing = await prisma.tenant.findUnique({
+    where: { clerkOrgId: data.id },
+  });
+
+  if (existing) {
+    const nextSlug = data.slug
+      ? await resolveUniqueTenantSlug(prisma, data.slug, {
+          excludeTenantId: existing.id,
+          fallbackSeed: data.id,
+        })
+      : existing.slug;
+
+    return prisma.tenant.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name ?? existing.name,
+        slug: nextSlug,
+      },
+    });
+  }
+
+  const baseSlug = data.slug ?? data.name ?? data.id;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const slug = await resolveUniqueTenantSlug(prisma, baseSlug, {
+        fallbackSeed: data.id,
+      });
+
+      return await prisma.tenant.create({
+        data: {
+          clerkOrgId: data.id,
+          name: data.name ?? data.id,
+          slug,
+          productType: 'custom',
+          crmType: null,
+          crmConfig: {},
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+
+      const tenantCreatedElsewhere = await prisma.tenant.findUnique({
+        where: { clerkOrgId: data.id },
+      });
+      if (tenantCreatedElsewhere) {
+        return tenantCreatedElsewhere;
+      }
+    }
+  }
+
+  throw new Error(`Unable to create tenant for Clerk organization ${data.id}`);
+}
 
 /**
  * Clerk webhook handler for organization lifecycle events.
@@ -57,16 +115,7 @@ export async function POST(request: NextRequest) {
 
     switch (type) {
       case 'organization.created': {
-        const tenant = await prisma.tenant.create({
-          data: {
-            clerkOrgId: data.id,
-            name: data.name ?? data.id,
-            slug: data.slug ?? data.id,
-            productType: 'custom',
-            crmType: null,
-            crmConfig: {},
-          },
-        });
+        const tenant = await createOrUpdateTenantFromClerkOrg(data);
 
         // Initialize cold-start state (non-fatal — tenant creation must not fail)
         try {
@@ -80,13 +129,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'organization.updated': {
-        await prisma.tenant.updateMany({
-          where: { clerkOrgId: data.id },
-          data: {
-            ...(data.name ? { name: data.name } : {}),
-            ...(data.slug ? { slug: data.slug } : {}),
-          },
-        });
+        await createOrUpdateTenantFromClerkOrg(data);
         log.info({ clerkOrgId: data.id }, 'Tenant updated from Clerk webhook');
         break;
       }

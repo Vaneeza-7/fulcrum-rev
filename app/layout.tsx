@@ -33,10 +33,8 @@ export default function RootLayout({
     <ClerkProvider
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
-      signInFallbackRedirectUrl="/"
-      signUpFallbackRedirectUrl="/"
-      signInForceRedirectUrl="/"
-      signUpForceRedirectUrl="/"
+      signInFallbackRedirectUrl="/auth/continue"
+      signUpFallbackRedirectUrl="/auth/continue"
     >
       <html lang="en">
         <body className="bg-brand-bg text-brand-black font-satoshi">
