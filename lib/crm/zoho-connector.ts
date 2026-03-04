@@ -4,6 +4,25 @@ import { CRMLeadData, CRMDeal, CRMClosedWonDeal, CRMTask, CRMFieldMapping, CRMAu
 const ZOHO_API_BASE = 'https://www.zohoapis.com/crm/v3';
 const ZOHO_AUTH_URL = 'https://accounts.zoho.com/oauth/v2/token';
 
+/**
+ * Map a Fulcrum score (0-100) to a Zoho Lead_Status stage.
+ *
+ * Staging progression: New → Working → Nurturing → Sales-Ready
+ *
+ * | Fulcrum Score | Grade | Zoho Lead_Status |
+ * |---------------|-------|-----------------|
+ * | 80 – 100      | A/A+  | Sales-Ready     |
+ * | 60 – 79       | B     | Nurturing       |
+ * | 40 – 59       | C     | Working         |
+ * | 0  – 39       | D     | New             |
+ */
+export function mapScoreToZohoLeadStatus(fulcrumScore: number): string {
+  if (fulcrumScore >= 80) return 'Sales-Ready';
+  if (fulcrumScore >= 60) return 'Nurturing';
+  if (fulcrumScore >= 40) return 'Working';
+  return 'New';
+}
+
 export class ZohoConnector extends CRMConnector {
   private accessToken: string | null = null;
   private tokenExpiresAt: number = 0;
@@ -65,7 +84,12 @@ export class ZohoConnector extends CRMConnector {
   }
 
   async createLead(data: CRMLeadData): Promise<string> {
-    const mapped = this.mapFields(data);
+    // Derive Lead_Status from score if not explicitly provided
+    const dataWithStatus: CRMLeadData = {
+      ...data,
+      lead_status: data.lead_status ?? mapScoreToZohoLeadStatus(data.fulcrum_score),
+    };
+    const mapped = this.mapFields(dataWithStatus);
 
     // Split full name into first/last
     const nameParts = data.first_name && data.last_name
@@ -95,8 +119,14 @@ export class ZohoConnector extends CRMConnector {
   }
 
   async updateLead(crmLeadId: string, data: Partial<CRMLeadData>): Promise<boolean> {
+    // Auto-advance Lead_Status when the score is being updated without an explicit status
+    const updateData: Partial<CRMLeadData> = { ...data };
+    if (data.fulcrum_score !== undefined && data.lead_status === undefined) {
+      updateData.lead_status = mapScoreToZohoLeadStatus(data.fulcrum_score);
+    }
+
     const mapped: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
+    for (const [key, value] of Object.entries(updateData)) {
       const crmField = this.fieldMapping[key] ?? key;
       mapped[crmField] = value;
     }
@@ -267,6 +297,7 @@ export class ZohoConnector extends CRMConnector {
       intent_score: 'Intent_Score',
       first_line: 'First_Line_Opener',
       source: 'Lead_Source',
+      lead_status: 'Lead_Status',
     };
   }
 }
