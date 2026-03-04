@@ -9,7 +9,6 @@ import { ROISourceTagger } from '@/lib/roi/source-tagger';
 import { FulcrumSourceType } from '@prisma/client';
 import { ColdStartGate } from '@/lib/cold-start';
 import { jobLogger } from '@/lib/logger';
-import { pushLeadToCRM } from '@/lib/jobs/crm-push';
 import { sendPipelineSummary } from '@/lib/slack/client';
 import { SlackLeadCard, SlackPipelineSummary } from '@/lib/slack/types';
 import { decryptCrmConfig } from '@/lib/settings/crm';
@@ -86,10 +85,20 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
         ? discoveryResult.credentials.apify.usingTenantKey
         : discoveryResult.credentials.instantly.usingTenantKey;
   } catch (error) {
-    const msg = `Scraping failed: ${error}`;
+    const msg = `Discovery failed: ${error}`;
     errors.push(msg);
-    await auditLog(tenantId, 'pipeline_error', undefined, { stage: 'scrape', error: msg });
-    return buildResult(tenantId, 0, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime);
+    await auditLog(tenantId, 'pipeline_error', undefined, { stage: 'discover', error: msg });
+    return buildResult(tenantId, 0, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime, providerUsed, providerFallbackUsed);
+  }
+
+  if (profiles.length === 0) {
+    await auditLog(tenantId, 'pipeline_discovery_empty', undefined, {
+      providerUsed,
+      providerFallbackUsed,
+      diagnostics: discoveryDiagnostics,
+    });
+    await auditLog(tenantId, 'pipeline_completed', undefined, { reason: 'no_profiles_discovered' });
+    return buildResult(tenantId, 0, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime, providerUsed, providerFallbackUsed);
   }
 
   // 2. DEDUP - Filter existing leads
@@ -105,8 +114,14 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
   });
 
   if (newProfiles.length === 0) {
+    await auditLog(tenantId, 'pipeline_discovery_empty', undefined, {
+      providerUsed,
+      providerFallbackUsed,
+      diagnostics: discoveryDiagnostics,
+      reason: 'all_profiles_deduplicated',
+    });
     await auditLog(tenantId, 'pipeline_completed', undefined, { reason: 'no_new_profiles' });
-    return buildResult(tenantId, profiles.length, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime);
+    return buildResult(tenantId, profiles.length, 0, 0, 0, 0, 0, [], gradeDistribution, errors, startTime, providerUsed, providerFallbackUsed);
   }
 
   // Cold-start check — gate actions for new tenants
@@ -306,30 +321,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     }
   }
 
-  // 8. AUTO-PUSH high-scoring leads to CRM (B grade and above)
-  let pushedCount = 0;
-  const pushErrors: string[] = [];
-  const crmLeadIds = new Map<string, string>(); // leadId -> crmLeadId
-
-  if (tenant.crmType && decryptedCrmConfig) {
-    for (const rec of createdLeadRecords) {
-      if (rec.fulcrumScore >= 60) {
-        try {
-          const result = await pushLeadToCRM(rec.id);
-          if (result.success && result.crmLeadId) {
-            pushedCount++;
-            crmLeadIds.set(rec.id, result.crmLeadId);
-          } else if (result.error) {
-            pushErrors.push(result.error);
-          }
-        } catch (err) {
-          pushErrors.push(`CRM push failed for ${rec.fullName}: ${err}`);
-        }
-      }
-    }
-  }
-
-  // 9. SLACK NOTIFICATION
+  // 8. SLACK NOTIFICATION
   const crmCfg = (decryptedCrmConfig ?? {}) as Record<string, unknown>;
   const crmOrgId = crmCfg?.org_id as string | undefined;
   const crmCustomViewUrl = crmCfg?.custom_view_url as string | undefined;
@@ -337,6 +329,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     .sort((a, b) => b.fulcrumScore - a.fulcrumScore)
     .slice(0, 10)
     .map((l) => ({
+      tenant_id: tenantId,
       lead_id: l.id,
       full_name: l.fullName,
       title: l.title,
@@ -347,16 +340,17 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
       intent_score: l.intentScore,
       first_line: l.firstLine,
       linkedin_url: l.linkedinUrl,
-      crm_lead_id: crmLeadIds.get(l.id),
+      crm_push_state: 'not_queued',
     }));
 
   const slackSummary: SlackPipelineSummary = {
+    tenant_id: tenantId,
     tenant_name: tenant.name,
     profiles_scraped: profiles.length,
     profiles_new: newProfiles.length,
     grade_distribution: gradeDistribution,
     top_leads: topLeads,
-    errors: [...errors, ...pushErrors],
+    errors,
     crm_org_id: crmOrgId,
     crm_type: tenant.crmType ?? undefined,
     crm_leads_url: crmCustomViewUrl ?? undefined,
@@ -374,7 +368,7 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     enriched: enrichedCount,
     scored: scoredCount,
     firstLines: firstLineCount,
-    pushedToCrm: pushedCount,
+    pushedToCrm: 0,
     grades: gradeDistribution,
     providerUsed,
     providerFallbackUsed,
@@ -388,11 +382,13 @@ export async function runPipelineForTenant(tenantId: string): Promise<PipelineRe
     enrichedCount,
     scoredCount,
     firstLineCount,
-    pushedCount,
-    pushErrors,
+    0,
+    [],
     gradeDistribution,
     errors,
-    startTime
+    startTime,
+    providerUsed,
+    providerFallbackUsed,
   );
 }
 
@@ -407,7 +403,9 @@ function buildResult(
   crmPushErrors: string[],
   grades: Record<string, number>,
   errors: string[],
-  startTime: number
+  startTime: number,
+  providerUsed?: string,
+  providerFallbackUsed?: boolean,
 ): PipelineResult {
   return {
     tenant_id: tenantId,
@@ -419,6 +417,8 @@ function buildResult(
     leads_pushed_to_crm: pushedToCrm,
     crm_push_errors: crmPushErrors,
     grade_distribution: grades,
+    provider_used: providerUsed,
+    provider_fallback_used: providerFallbackUsed,
     errors,
     duration_ms: Date.now() - startTime,
   };

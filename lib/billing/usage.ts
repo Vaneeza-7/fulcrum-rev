@@ -128,8 +128,8 @@ export async function recordFirstLineUsage(input: {
   })
 }
 
-export async function syncBillingPeriodsForAllTenants() {
-  const results = await rolloverManualBillingPeriods()
+export async function syncBillingPeriodsForAllTenants(tenantIds?: string[]) {
+  const results = await rolloverManualBillingPeriods(undefined, tenantIds)
   return results.map((result) => ({
     tenantId: result.tenantId,
     grantsCreated: result.grantsCreated,

@@ -1,49 +1,164 @@
-import { prisma, auditLog } from '@/lib/db';
-import { CRMFactory } from '@/lib/crm/factory';
-import { jobLogger } from '@/lib/logger';
-import { decryptCrmConfig } from '@/lib/settings/crm';
+import { prisma, auditLog } from '@/lib/db'
+import { CRMFactory } from '@/lib/crm/factory'
+import { jobLogger } from '@/lib/logger'
+import {
+  buildCrmLeadData,
+  humanizeCrmPushError,
+  runCrmPreflight,
+  type CrmPushFailureCode,
+} from '@/lib/crm/preflight'
 
-const log = jobLogger('crm_push');
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 1000;
+const log = jobLogger('crm_push')
+const MAX_RETRIES = 3
+const BASE_DELAY_MS = 1_000
+const QUEUEABLE_CRM_PUSH_STATES = ['queued', 'failed'] as const
+
+interface PushLeadResult {
+  success: boolean
+  skipped?: boolean
+  crmLeadId?: string
+  error?: string
+  outcome?: string
+}
+
+async function createCrmPushEvent(input: {
+  tenantId: string
+  leadId: string
+  connector: string
+  outcome: string
+  attemptNumber: number
+  crmObjectId?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  metadata?: Record<string, unknown>
+}) {
+  await prisma.crmPushEvent.create({
+    data: {
+      tenantId: input.tenantId,
+      leadId: input.leadId,
+      connector: input.connector,
+      outcome: input.outcome,
+      attemptNumber: input.attemptNumber,
+      crmObjectId: input.crmObjectId ?? null,
+      errorCode: input.errorCode ?? null,
+      errorMessage: input.errorMessage ?? null,
+      metadata: (input.metadata ?? {}) as never,
+    },
+  })
+}
+
+async function markLeadFailed(input: {
+  leadId: string
+  error: string
+}) {
+  await prisma.lead.update({
+    where: { id: input.leadId },
+    data: {
+      status: 'approved',
+      crmPushState: 'failed',
+      crmPushProcessingAt: null,
+      crmPushLastError: input.error,
+    },
+  })
+}
+
+function isQueueableState(value: string) {
+  return QUEUEABLE_CRM_PUSH_STATES.includes(value as (typeof QUEUEABLE_CRM_PUSH_STATES)[number])
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function getLeadWithTenant(leadId: string) {
+  return prisma.lead.findUniqueOrThrow({
+    where: { id: leadId },
+    include: {
+      tenant: true,
+    },
+  })
+}
 
 /**
- * Push a single lead to the CRM with exponential backoff retry.
+ * Push a single approved queued lead to the CRM.
+ * Claim-based and idempotent so cron workers can safely retry.
  */
-export async function pushLeadToCRM(leadId: string): Promise<{ success: boolean; crmLeadId?: string; error?: string }> {
-  const lead = await prisma.lead.findUniqueOrThrow({
-    where: { id: leadId },
-    include: { tenant: true },
-  });
+export async function pushLeadToCRM(leadId: string): Promise<PushLeadResult> {
+  const currentLead = await getLeadWithTenant(leadId)
 
-  if (!lead.tenant.crmType) {
-    return { success: false, error: 'No CRM configured for this tenant' };
-  }
-  const crmConfig = decryptCrmConfig(lead.tenant.crmConfig);
-  if (!crmConfig) {
-    return { success: false, error: 'CRM config missing or unreadable' };
+  if (currentLead.crmLeadId || currentLead.status === 'pushed_to_crm') {
+    return {
+      success: true,
+      skipped: true,
+      crmLeadId: currentLead.crmLeadId ?? undefined,
+      outcome: 'already_pushed',
+    }
   }
 
-  const crm = CRMFactory.create(lead.tenant.crmType, crmConfig);
+  if (currentLead.status !== 'approved' || !isQueueableState(currentLead.crmPushState)) {
+    return {
+      success: false,
+      skipped: true,
+      error: 'Lead is not queueable for CRM push.',
+      outcome: 'not_queueable',
+    }
+  }
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  const claim = await prisma.lead.updateMany({
+    where: {
+      id: leadId,
+      status: 'approved',
+      crmLeadId: null,
+      crmPushState: { in: ['queued', 'failed'] },
+    },
+    data: {
+      crmPushState: 'processing',
+      crmPushProcessingAt: new Date(),
+      crmPushAttempts: { increment: 1 },
+    },
+  })
+
+  if (claim.count === 0) {
+    const latest = await getLeadWithTenant(leadId)
+    return {
+      success: Boolean(latest.crmLeadId || latest.status === 'pushed_to_crm'),
+      skipped: true,
+      crmLeadId: latest.crmLeadId ?? undefined,
+      error: latest.crmPushLastError ?? undefined,
+      outcome: latest.crmLeadId ? 'already_pushed' : 'claim_lost',
+    }
+  }
+
+  const lead = await getLeadWithTenant(leadId)
+  const attemptNumber = lead.crmPushAttempts
+  const preflight = runCrmPreflight(lead.tenant, lead)
+
+  if (!preflight.ok || !preflight.connector || !preflight.crmConfig) {
+    const errorCode = (preflight.errorCode ?? 'validation_failed') as CrmPushFailureCode
+    const message = preflight.message ?? 'CRM preflight failed.'
+    await markLeadFailed({ leadId, error: message })
+    await createCrmPushEvent({
+      tenantId: lead.tenantId,
+      leadId,
+      connector: preflight.connector ?? lead.tenant.crmType ?? 'crm',
+      outcome: errorCode === 'auth_failed' ? 'auth_failed' : 'validation_failed',
+      attemptNumber,
+      errorCode,
+      errorMessage: message,
+      metadata: { stage: 'preflight' },
+    })
+
+    return { success: false, error: message, outcome: errorCode }
+  }
+
+  const crm = CRMFactory.create(preflight.connector, preflight.crmConfig)
+  const crmLeadData = buildCrmLeadData(lead, lead.tenant.name)
+  let lastError: unknown = null
+
+  for (let retry = 1; retry <= MAX_RETRIES; retry++) {
     try {
-      await crm.authenticate();
-
-      const nameParts = lead.fullName.split(' ');
-      const crmLeadId = await crm.createLead({
-        first_name: nameParts.slice(0, -1).join(' ') || nameParts[0],
-        last_name: nameParts[nameParts.length - 1] || 'Unknown',
-        company: lead.company ?? '',
-        title: lead.title ?? '',
-        linkedin_url: lead.linkedinUrl,
-        fulcrum_score: Number(lead.fulcrumScore),
-        fulcrum_grade: lead.fulcrumGrade ?? '',
-        fit_score: Number(lead.fitScore),
-        intent_score: Number(lead.intentScore),
-        first_line: lead.firstLine ?? '',
-        source: `Fulcrum - ${lead.tenant.name}`,
-      });
+      await crm.authenticate()
+      const crmLeadId = await crm.createLead(crmLeadData)
 
       await prisma.lead.update({
         where: { id: leadId },
@@ -51,50 +166,91 @@ export async function pushLeadToCRM(leadId: string): Promise<{ success: boolean;
           status: 'pushed_to_crm',
           crmLeadId,
           pushedToCrmAt: new Date(),
+          crmPushState: 'succeeded',
+          crmPushProcessingAt: null,
+          crmPushLastError: null,
         },
-      });
+      })
+
+      await createCrmPushEvent({
+        tenantId: lead.tenantId,
+        leadId,
+        connector: preflight.connector,
+        outcome: 'created',
+        attemptNumber,
+        crmObjectId: crmLeadId,
+      })
 
       await auditLog(lead.tenantId, 'lead_pushed_to_crm', leadId, {
         crmLeadId,
-        attempt,
-      });
+        attemptNumber,
+      })
 
-      return { success: true, crmLeadId };
+      return { success: true, crmLeadId, outcome: 'created' }
     } catch (error) {
-      log.error({ err: error, leadId, attempt, maxRetries: MAX_RETRIES }, 'CRM push attempt failed');
+      lastError = error
+      log.error({ err: error, leadId, retry, attemptNumber }, 'CRM push attempt failed')
 
-      if (attempt < MAX_RETRIES) {
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      } else {
-        await auditLog(lead.tenantId, 'crm_push_failed', leadId, {
-          error: String(error),
-          attempts: MAX_RETRIES,
-        });
-        return { success: false, error: String(error) };
+      if (retry < MAX_RETRIES) {
+        await delay(BASE_DELAY_MS * Math.pow(2, retry - 1))
       }
     }
   }
 
-  return { success: false, error: 'Max retries exceeded' };
+  const humanized = humanizeCrmPushError(lastError)
+  await markLeadFailed({ leadId, error: humanized.message })
+  await createCrmPushEvent({
+    tenantId: lead.tenantId,
+    leadId,
+    connector: preflight.connector,
+    outcome:
+      humanized.errorCode === 'duplicate_detected'
+        ? 'duplicate_detected'
+        : humanized.errorCode === 'auth_failed'
+          ? 'auth_failed'
+          : humanized.errorCode === 'validation_failed'
+            ? 'validation_failed'
+            : 'transient_failed',
+    attemptNumber,
+    errorCode: humanized.errorCode,
+    errorMessage: humanized.message,
+    metadata: {
+      rawError: lastError instanceof Error ? lastError.message : String(lastError),
+    },
+  })
+
+  await auditLog(lead.tenantId, 'crm_push_failed', leadId, {
+    error: humanized.message,
+    errorCode: humanized.errorCode,
+    attemptNumber,
+  })
+
+  return { success: false, error: humanized.message, outcome: humanized.errorCode }
 }
 
 /**
- * Push all approved leads for a tenant.
+ * Push all approved queued leads for a tenant.
  */
 export async function pushApprovedLeads(tenantId: string): Promise<{ pushed: number; failed: number }> {
   const leads = await prisma.lead.findMany({
-    where: { tenantId, status: 'approved' },
-  });
+    where: {
+      tenantId,
+      status: 'approved',
+      crmLeadId: null,
+      crmPushState: { in: ['queued', 'failed'] },
+    },
+    orderBy: [{ crmPushQueuedAt: 'asc' }, { updatedAt: 'asc' }],
+    select: { id: true },
+  })
 
-  let pushed = 0;
-  let failed = 0;
+  let pushed = 0
+  let failed = 0
 
   for (const lead of leads) {
-    const result = await pushLeadToCRM(lead.id);
-    if (result.success) pushed++;
-    else failed++;
+    const result = await pushLeadToCRM(lead.id)
+    if (result.success && !result.skipped) pushed++
+    else if (!result.skipped) failed++
   }
 
-  return { pushed, failed };
+  return { pushed, failed }
 }

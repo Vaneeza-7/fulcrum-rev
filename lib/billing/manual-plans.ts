@@ -2,10 +2,24 @@ import { prisma } from '@/lib/db'
 import { grantIncludedCreditsForPeriod } from './ledger'
 import { getBillingPlan, isPlanSlug, type PlanSlug } from './plans'
 
-function addOneMonth(date: Date) {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + 1)
-  return next
+export function addOneMonthUtc(date: Date) {
+  const year = date.getUTCFullYear()
+  const month = date.getUTCMonth()
+  const day = date.getUTCDate()
+  const hours = date.getUTCHours()
+  const minutes = date.getUTCMinutes()
+  const seconds = date.getUTCSeconds()
+  const milliseconds = date.getUTCMilliseconds()
+
+  const targetMonthIndex = month + 1
+  const targetYear = year + Math.floor(targetMonthIndex / 12)
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+  const clampedDay = Math.min(day, lastDayOfTargetMonth)
+
+  return new Date(
+    Date.UTC(targetYear, targetMonth, clampedDay, hours, minutes, seconds, milliseconds),
+  )
 }
 
 export function getCurrentBillingDisplayPeriod(now = new Date()) {
@@ -40,7 +54,7 @@ export async function upsertManualPlanAssignment(input: {
 }) {
   const anchorDate = input.anchorDate ?? new Date()
   const currentPeriodStart = new Date(anchorDate)
-  const currentPeriodEnd = addOneMonth(currentPeriodStart)
+  const currentPeriodEnd = addOneMonthUtc(currentPeriodStart)
   getBillingPlan(input.planSlug)
 
   const account = await prisma.tenantBillingAccount.upsert({
@@ -84,12 +98,13 @@ export async function upsertManualPlanAssignment(input: {
   return account
 }
 
-export async function rolloverManualBillingPeriods(now = new Date()) {
+export async function rolloverManualBillingPeriods(now = new Date(), tenantIds?: string[]) {
   const accounts = await prisma.tenantBillingAccount.findMany({
     where: {
       billingSource: 'manual',
       subscriptionStatus: 'active',
       planSlug: { not: null },
+      ...(tenantIds ? { tenantId: { in: tenantIds } } : {}),
     },
   })
 
@@ -99,12 +114,12 @@ export async function rolloverManualBillingPeriods(now = new Date()) {
     if (!isPlanSlug(account.planSlug)) continue
 
     let periodStart = account.currentPeriodStart ?? new Date(now)
-    let periodEnd = account.currentPeriodEnd ?? addOneMonth(periodStart)
+    let periodEnd = account.currentPeriodEnd ?? addOneMonthUtc(periodStart)
     let grantsCreated = 0
 
     while (periodEnd <= now) {
       periodStart = new Date(periodEnd)
-      periodEnd = addOneMonth(periodStart)
+      periodEnd = addOneMonthUtc(periodStart)
       grantsCreated += 1
 
       await grantIncludedCreditsForPeriod({

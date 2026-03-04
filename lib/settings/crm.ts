@@ -55,6 +55,9 @@ export async function getTenantCrmSettings(db: SettingsDbClient, tenantId: strin
       select: {
         crmType: true,
         crmConfig: true,
+        crmPushPaused: true,
+        crmPushPauseReason: true,
+        crmPushPausedAt: true,
       },
     }),
     db.lead.findFirst({
@@ -77,6 +80,9 @@ export async function getTenantCrmSettings(db: SettingsDbClient, tenantId: strin
     hasTenantConfig,
     lastPushAt: lastPush?.pushedToCrmAt ?? null,
     customViewUrl: typeof decrypted.custom_view_url === 'string' ? decrypted.custom_view_url : null,
+    crmPushPaused: tenant.crmPushPaused,
+    crmPushPauseReason: tenant.crmPushPauseReason,
+    crmPushPausedAt: tenant.crmPushPausedAt,
   }
 }
 

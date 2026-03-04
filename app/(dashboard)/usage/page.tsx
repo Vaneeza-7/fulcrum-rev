@@ -59,8 +59,8 @@ export default async function UsagePage() {
             attribution={attribution}
           />
           <ShadowROICard
-            label="Provider Cost Spend"
-            value={`$${roiSummary.totalSpend.toFixed(2)}`}
+            label="Projected Billable"
+            value={`$${Number(billing.projectedBillableUsd).toFixed(2)}`}
             attribution={attribution}
           />
           <ShadowROICard
@@ -121,6 +121,28 @@ export default async function UsagePage() {
             ) : null}
           </section>
         </div>
+
+        <section className="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">
+            Lead Economics
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatBlock label="Approved Leads" value={String(billing.approvedLeadCount)} />
+            <StatBlock label="Pushed Leads" value={String(billing.pushedLeadCount)} />
+            <StatBlock
+              label="Cost per Approved Lead"
+              value={`$${Number(billing.projectedBillablePerApprovedLeadUsd).toFixed(2)}`}
+            />
+            <StatBlock
+              label="Cost per Pushed Lead"
+              value={`$${Number(billing.projectedBillablePerPushedLeadUsd).toFixed(2)}`}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StatBlock label="Credits per Approved Lead" value={billing.creditsPerApprovedLead} />
+            <StatBlock label="Credits per Pushed Lead" value={billing.creditsPerPushedLead} />
+          </div>
+        </section>
 
         <section className="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-5">
           <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-gray-400">

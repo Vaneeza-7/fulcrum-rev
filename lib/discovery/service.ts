@@ -27,15 +27,25 @@ function normalizeQueries(
   }))
 }
 
-function isConfigError(error: unknown) {
+export function shouldFallbackToApify(error: unknown) {
   const message = String(error).toLowerCase()
   return (
     message.includes('401') ||
     message.includes('403') ||
+    message.includes('408') ||
+    message.includes('429') ||
+    message.includes('500') ||
+    message.includes('502') ||
+    message.includes('503') ||
+    message.includes('504') ||
     message.includes('auth') ||
     message.includes('credential') ||
     message.includes('config') ||
-    message.includes('unauthorized')
+    message.includes('unauthorized') ||
+    message.includes('timeout') ||
+    message.includes('network') ||
+    message.includes('fetch') ||
+    message.includes('econnreset')
   )
 }
 
@@ -86,7 +96,7 @@ export class LeadDiscoveryService {
     } catch (error) {
       if (
         primaryProvider === 'instantly' &&
-        isConfigError(error) &&
+        shouldFallbackToApify(error) &&
         credentials.apify.apiToken
       ) {
         const fallback = await apifyProvider.searchProspects(request)

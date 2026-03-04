@@ -4,12 +4,23 @@ import {
   formatUsdMicros,
   getCreditUnitUsdDisplay,
   getTargetMarkupMultiplierDisplay,
+  usdMicrosToUsdNumber,
 } from './credit-rules'
 import { getBillingPeriodWindow } from './manual-plans'
 import { getBillingPlan, isPlanSlug } from './plans'
 
 function sumCredits(values: Array<{ creditDelta: unknown }>) {
   return values.reduce((sum, entry) => sum + Math.abs(Number(entry.creditDelta ?? 0)), 0)
+}
+
+function formatPerLeadMetric(total: number, count: number) {
+  if (count <= 0) return '0.000'
+  return (total / count).toFixed(3)
+}
+
+function formatUsdPerLead(totalUsdMicros: number, count: number) {
+  if (count <= 0) return '0.000000'
+  return formatUsdMicros(Math.round(totalUsdMicros / count))
 }
 
 export async function getTenantBillingSummary(tenantId: string) {
@@ -22,7 +33,7 @@ export async function getTenantBillingSummary(tenantId: string) {
     ? getBillingPlan(account.planSlug)
     : null
 
-  const [usageEntries, usageEvents] = await Promise.all([
+  const [usageEntries, usageEvents, approvedLeadCount, pushedLeadCount] = await Promise.all([
     prisma.fulcrumCreditLedger.findMany({
       where: {
         tenantId,
@@ -52,6 +63,24 @@ export async function getTenantBillingSummary(tenantId: string) {
         providerCostUsdMicros: true,
         tenantOwnedCredentialUsed: true,
         pricingSource: true,
+      },
+    }),
+    prisma.lead.count({
+      where: {
+        tenantId,
+        approvedAt: {
+          gte: currentPeriodStart,
+          lt: currentPeriodEnd,
+        },
+      },
+    }),
+    prisma.lead.count({
+      where: {
+        tenantId,
+        pushedToCrmAt: {
+          gte: currentPeriodStart,
+          lt: currentPeriodEnd,
+        },
       },
     }),
   ])
@@ -133,6 +162,12 @@ export async function getTenantBillingSummary(tenantId: string) {
       remainingCredits: formatCredits(remainingCreditsNumber),
       providerCostUsd: formatUsdMicros(providerCostUsdMicros),
       projectedBillableUsd: formatUsdMicros(projectedBillableUsdMicros),
+      approvedLeadCount,
+      pushedLeadCount,
+      creditsPerApprovedLead: formatPerLeadMetric(usedCreditsNumber, approvedLeadCount),
+      creditsPerPushedLead: formatPerLeadMetric(usedCreditsNumber, pushedLeadCount),
+      projectedBillablePerApprovedLeadUsd: formatUsdPerLead(projectedBillableUsdMicros, approvedLeadCount),
+      projectedBillablePerPushedLeadUsd: formatUsdPerLead(projectedBillableUsdMicros, pushedLeadCount),
       providerBreakdown: Array.from(providerBreakdownMap.values())
         .sort((a, b) => b.providerCostUsdMicros - a.providerCostUsdMicros)
         .map((entry) => ({
@@ -145,6 +180,10 @@ export async function getTenantBillingSummary(tenantId: string) {
           billable: entry.billable,
         })),
       unpricedActivity: Array.from(unpricedActivityMap.values()).sort((a, b) => b.activityCount - a.activityCount),
+      metrics: {
+        providerCostUsdNumber: usdMicrosToUsdNumber(providerCostUsdMicros),
+        projectedBillableUsdNumber: usdMicrosToUsdNumber(projectedBillableUsdMicros),
+      },
     },
     account,
   }

@@ -13,6 +13,41 @@ function getCrmLabel(crmType?: string): string {
   }
 }
 
+function buildActionValue(value: Record<string, unknown>) {
+  return JSON.stringify(value);
+}
+
+function getLeadReasonText(lead: SlackLeadCard) {
+  return lead.first_line?.trim() || 'Strong fit based on Fulcrum scoring.';
+}
+
+function getCrmHintText(lead: SlackLeadCard, crmType?: string) {
+  const crmLabel = getCrmLabel(crmType);
+
+  switch (lead.crm_push_state) {
+    case 'queued':
+      return `Waiting to push to ${crmLabel}`;
+    case 'processing':
+      return `Pushing to ${crmLabel}`;
+    case 'succeeded':
+      return `Pushed to ${crmLabel}`;
+    case 'failed':
+      return `Failed: ${lead.crm_push_last_error ?? 'CRM push needs attention'}`;
+    default:
+      return 'Not sent to CRM yet';
+  }
+}
+
+function buildLeadReviewText(lead: SlackLeadCard, crmType?: string) {
+  return [
+    `*${lead.full_name}* — Grade *${lead.fulcrum_grade}* / Score *${lead.fulcrum_score}*`,
+    `${lead.title} at ${lead.company}`,
+    `Fit ${lead.fit_score} / Intent ${lead.intent_score}`,
+    `Why: ${getLeadReasonText(lead)}`,
+    `CRM: ${getCrmHintText(lead, crmType)}`,
+  ].join('\n');
+}
+
 /** Build a deep-link URL for a specific lead in the CRM. */
 function getCrmLeadUrl(crmType?: string, orgId?: string, leadId?: string): string | null {
   if (!orgId || !leadId) return null;
@@ -50,22 +85,23 @@ export function buildPipelineSummaryBlocks(summary: SlackPipelineSummary) {
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: 'Push All A+ to CRM' },
+          text: { type: 'plain_text', text: 'Approve All A+' },
           style: 'primary',
           action_id: 'push_all_aplus',
-          value: JSON.stringify({ grades: ['A+'] }),
+          value: buildActionValue({ tenantId: summary.tenant_id, grades: ['A+'] }),
         },
         {
           type: 'button',
           text: { type: 'plain_text', text: 'Review All Leads' },
           action_id: 'review_leads',
+          value: buildActionValue({ tenantId: summary.tenant_id }),
         },
         {
           type: 'button',
           text: { type: 'plain_text', text: 'Reject D Grade' },
           style: 'danger',
           action_id: 'reject_grade',
-          value: JSON.stringify({ grades: ['D'] }),
+          value: buildActionValue({ tenantId: summary.tenant_id, grades: ['D'] }),
         },
       ],
     },
@@ -140,14 +176,14 @@ export function buildLeadReviewBlocks(lead: SlackLeadCard, crmOrgId?: string, cr
       text: { type: 'plain_text', text: 'Approve' },
       style: 'primary',
       action_id: 'approve_lead',
-      value: lead.lead_id,
+      value: buildActionValue({ tenantId: lead.tenant_id, leadId: lead.lead_id }),
     },
     {
       type: 'button',
       text: { type: 'plain_text', text: 'Reject' },
       style: 'danger',
       action_id: 'reject_lead',
-      value: lead.lead_id,
+      value: buildActionValue({ tenantId: lead.tenant_id, leadId: lead.lead_id }),
     },
     {
       type: 'button',
@@ -174,12 +210,55 @@ export function buildLeadReviewBlocks(lead: SlackLeadCard, crmOrgId?: string, cr
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${lead.full_name}*\n${lead.title} at ${lead.company}\n\nFulcrum Score: *${lead.fulcrum_score}* (${lead.fulcrum_grade})\nFit: ${lead.fit_score}/40 | Intent: ${lead.intent_score}/60\n\n_${lead.first_line || 'No first line'}_`,
+        text: buildLeadReviewText(lead, crmType),
       },
     },
     {
       type: 'actions',
       elements: actionElements,
+    },
+    { type: 'divider' },
+  ];
+}
+
+export function buildLeadReviewOutcomeBlocks(
+  lead: SlackLeadCard,
+  outcome: string,
+  crmOrgId?: string,
+  crmType?: string,
+) {
+  const buttons: unknown[] = [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: 'LinkedIn' },
+      action_id: 'open_linkedin_review',
+      url: lead.linkedin_url,
+    },
+  ];
+
+  if (lead.crm_lead_id && crmOrgId) {
+    const crmUrl = getCrmLeadUrl(crmType, crmOrgId, lead.crm_lead_id);
+    if (crmUrl) {
+      buttons.push({
+        type: 'button',
+        text: { type: 'plain_text', text: `View in ${getCrmLabel(crmType)}` },
+        url: crmUrl,
+        action_id: 'open_crm_review',
+      });
+    }
+  }
+
+  return [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `${buildLeadReviewText(lead, crmType)}\n*Status:* ${outcome}`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: buttons,
     },
     { type: 'divider' },
   ];

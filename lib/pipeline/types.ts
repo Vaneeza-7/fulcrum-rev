@@ -38,6 +38,8 @@ export interface PipelineResult {
   leads_pushed_to_crm: number;
   crm_push_errors: string[];
   grade_distribution: Record<string, number>;
+  provider_used?: string;
+  provider_fallback_used?: boolean;
   errors: string[];
   duration_ms: number;
 }

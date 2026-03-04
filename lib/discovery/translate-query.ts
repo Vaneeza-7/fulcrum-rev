@@ -1,38 +1,64 @@
 import type { LeadDiscoveryQuery } from './provider'
 
-function parseCompanySizeRange(companySize: string | undefined) {
-  if (!companySize) return {}
+const TITLE_HINTS = [
+  'ceo',
+  'founder',
+  'cto',
+  'chief',
+  'head',
+  'lead',
+  'director',
+  'vice president',
+  'vp',
+  'manager',
+  'officer',
+  'engineer',
+  'developer',
+  'superintendent',
+]
 
-  const match = companySize.match(/(\d+)\s*[-–]\s*(\d+)/)
-  if (!match) {
-    const single = companySize.match(/^\d+$/)
-    if (!single) return {}
-    const exact = Number(single[0])
-    return { company_size_min: exact, company_size_max: exact }
+function normalizeBooleanTokens(input: string) {
+  return input
+    .replace(/[()"]/g, ' ')
+    .split(/\b(?:OR|AND)\b/gi)
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function splitInstantlyKeywordBuckets(keywords: string) {
+  const tokens = normalizeBooleanTokens(keywords)
+  const title: string[] = []
+
+  for (const token of tokens) {
+    const normalized = token.toLowerCase()
+    if (TITLE_HINTS.some((hint) => normalized.includes(hint)) && !title.includes(token)) {
+      title.push(token)
+    }
   }
 
-  return {
-    company_size_min: Number(match[1]),
-    company_size_max: Number(match[2]),
+  if (title.length === 0 && tokens.length > 0) {
+    title.push(tokens[0])
   }
+
+  return { title }
 }
 
 export function translateCurrentQueryToInstantlyFilter(query: LeadDiscoveryQuery) {
-  const freeText = [
-    query.searchQuery.keywords,
-    query.searchQuery.additionalKeywords,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .trim()
+  const buckets = splitInstantlyKeywordBuckets(query.searchQuery.keywords)
 
   return {
-    query: freeText,
-    filters: {
-      ...(query.searchQuery.industry?.trim()
-        ? { industry: query.searchQuery.industry.trim() }
+    search_filters: {
+      ...(buckets.title.length > 0
+        ? {
+            title: {
+              include: buckets.title,
+            },
+          }
         : {}),
-      ...parseCompanySizeRange(query.searchQuery.companySize),
+      // Instantly's non-title filters use provider-specific enums and matching
+      // semantics that do not align cleanly with our free-text onboarding
+      // schema. For launch, we bias toward recall by translating only role/title
+      // intent here and letting scoring plus human review narrow the results.
     },
     limit: query.maxResults,
   }

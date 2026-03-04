@@ -1,74 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { verifyCronAuth } from '@/lib/cron/verify-auth';
-import { prisma } from '@/lib/db';
-import { jobLogger } from '@/lib/logger';
-import { SignalWeightService } from '@/lib/scoring/signal-weight-service';
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyCronAuth } from '@/lib/cron/verify-auth'
+import { prisma } from '@/lib/db'
+import { jobLogger } from '@/lib/logger'
+import { SignalWeightService } from '@/lib/scoring/signal-weight-service'
+import { getTenantIdFromRequest } from '@/lib/cron/get-tenant-id'
+import { getCoreLaunchTenants } from '@/lib/tenants/core-launch'
 
-const log = jobLogger('hitl-recalibrate');
+const log = jobLogger('hitl-recalibrate')
 
 export async function POST(request: NextRequest) {
-  const authError = verifyCronAuth(request);
-  if (authError) return authError;
+  const authError = verifyCronAuth(request)
+  if (authError) return authError
 
-  const startedAt = Date.now();
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
+  const { tenantId, error } = getTenantIdFromRequest(request)
+  if (error) return error
 
-  // Find tenants with overdue unapplied signals (>24h old — SLA breach)
+  const startedAt = Date.now()
+  const coreTenants = await getCoreLaunchTenants(tenantId)
+  const allowedTenantIds = new Set(coreTenants.map((tenant) => tenant.id))
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
   const overdueSignals = await prisma.negativeSignal.findMany({
     where: {
       appliedToModel: false,
       createdAt: { lte: cutoff },
+      tenantId: { in: Array.from(allowedTenantIds) },
     },
     select: { tenantId: true },
     distinct: ['tenantId'],
-  });
+  })
 
   const results: Array<{
-    tenantId: string;
-    signalsProcessed: number;
-    weightsAdjusted: number;
-  }> = [];
+    tenantId: string
+    signalsProcessed: number
+    weightsAdjusted: number
+  }> = []
 
-  for (const { tenantId } of overdueSignals) {
+  for (const { tenantId: scopedTenantId } of overdueSignals) {
     try {
-      const result = await SignalWeightService.recalibrateFromNegativeSignals(tenantId);
-      results.push({ tenantId, ...result });
-      log.info(
-        { tenantId, signalsProcessed: result.signalsProcessed, weightsAdjusted: result.weightsAdjusted },
-        'Overdue recalibration completed',
-      );
+      const result = await SignalWeightService.recalibrateFromNegativeSignals(scopedTenantId)
+      results.push({ tenantId: scopedTenantId, ...result })
     } catch (err) {
-      log.error({ error: err, tenantId }, 'Recalibration failed');
-      results.push({ tenantId, signalsProcessed: 0, weightsAdjusted: 0 });
+      log.error({ error: err, tenantId: scopedTenantId }, 'Recalibration failed')
+      results.push({ tenantId: scopedTenantId, signalsProcessed: 0, weightsAdjusted: 0 })
     }
   }
 
-  // Also process any tenant with unapplied signals (even if <24h, run opportunistically)
   const allUnapplied = await prisma.negativeSignal.findMany({
-    where: { appliedToModel: false },
+    where: {
+      appliedToModel: false,
+      tenantId: { in: Array.from(allowedTenantIds) },
+    },
     select: { tenantId: true },
     distinct: ['tenantId'],
-  });
+  })
 
-  const alreadyProcessed = new Set(results.map(r => r.tenantId));
-
-  for (const { tenantId } of allUnapplied) {
-    if (alreadyProcessed.has(tenantId)) continue;
+  const alreadyProcessed = new Set(results.map((result) => result.tenantId))
+  for (const { tenantId: scopedTenantId } of allUnapplied) {
+    if (alreadyProcessed.has(scopedTenantId)) continue
     try {
-      const result = await SignalWeightService.recalibrateFromNegativeSignals(tenantId);
-      results.push({ tenantId, ...result });
+      const result = await SignalWeightService.recalibrateFromNegativeSignals(scopedTenantId)
+      results.push({ tenantId: scopedTenantId, ...result })
     } catch (err) {
-      log.error({ error: err, tenantId }, 'Recalibration failed');
+      log.error({ error: err, tenantId: scopedTenantId }, 'Recalibration failed')
     }
   }
-
-  const durationMs = Date.now() - startedAt;
-  log.info({ tenantsProcessed: results.length, durationMs }, 'HITL recalibration cron completed');
 
   return NextResponse.json({
     success: true,
     tenantsProcessed: results.length,
-    durationMs,
+    durationMs: Date.now() - startedAt,
     results,
-  });
+  })
 }

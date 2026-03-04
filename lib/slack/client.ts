@@ -1,6 +1,11 @@
 import { WebClient } from '@slack/web-api';
 import { prisma } from '@/lib/db';
-import { buildPipelineSummaryBlocks, buildLeadReviewBlocks, buildDealAlertBlocks } from './blocks';
+import {
+  buildPipelineSummaryBlocks,
+  buildLeadReviewBlocks,
+  buildLeadReviewOutcomeBlocks,
+  buildDealAlertBlocks,
+} from './blocks';
 import { SlackLeadCard, SlackPipelineSummary, SlackDealAlert } from './types';
 import { decryptSlackBotToken } from '@/lib/settings/slack';
 
@@ -64,6 +69,26 @@ export async function sendLeadReviewThread(
       blocks: buildLeadReviewBlocks(lead, crmOrgId, crmType) as never[],
     });
   }
+}
+
+export async function updateLeadReviewMessage(
+  tenantId: string,
+  channelId: string,
+  messageTs: string,
+  lead: SlackLeadCard,
+  outcome: string,
+  crmOrgId?: string,
+  crmType?: string,
+): Promise<void> {
+  const slack = await getSlackClient(tenantId);
+  if (!slack) return;
+
+  await slack.client.chat.update({
+    channel: channelId,
+    ts: messageTs,
+    text: `${lead.full_name}: ${outcome}`,
+    blocks: buildLeadReviewOutcomeBlocks(lead, outcome, crmOrgId, crmType) as never[],
+  });
 }
 
 /**

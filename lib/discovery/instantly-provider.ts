@@ -1,16 +1,14 @@
 import type { LinkedInProfile } from '@/lib/pipeline/types'
 import type { LeadDiscoveryProvider, LeadDiscoveryRequest, LeadDiscoveryResult } from './provider'
 import { translateCurrentQueryToInstantlyFilter } from './translate-query'
+import { mapWithConcurrency } from '@/lib/utils/map-with-concurrency'
 
 const INSTANTLY_BASE_URL = 'https://api.instantly.ai/api/v2'
+const INSTANTLY_PREVIEW_PATH = '/supersearch-enrichment/preview-leads-from-supersearch'
+const INSTANTLY_REQUEST_TIMEOUT_MS = 45_000
 
 function buildLocation(record: Record<string, unknown>) {
-  const locationParts = [
-    record.city,
-    record.state,
-    record.country,
-    record.location,
-  ]
+  const locationParts = [record.city, record.state, record.country, record.location]
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter(Boolean)
 
@@ -21,6 +19,7 @@ function mapInstantlyLead(item: Record<string, unknown>): LinkedInProfile | null
   const linkedinUrl =
     (typeof item.linkedin_url === 'string' && item.linkedin_url) ||
     (typeof item.linkedinUrl === 'string' && item.linkedinUrl) ||
+    (typeof item.linkedIn === 'string' && item.linkedIn) ||
     (typeof item.profile_url === 'string' && item.profile_url) ||
     (typeof item.contact_linkedin_url === 'string' && item.contact_linkedin_url) ||
     ''
@@ -48,11 +47,13 @@ function mapInstantlyLead(item: Record<string, unknown>): LinkedInProfile | null
     full_name: fullName,
     title:
       (typeof item.title === 'string' && item.title) ||
+      (typeof item.jobTitle === 'string' && item.jobTitle) ||
       (typeof item.job_title === 'string' && item.job_title) ||
       (typeof item.headline === 'string' && item.headline) ||
       undefined,
     company:
       (typeof item.company_name === 'string' && item.company_name) ||
+      (typeof item.companyName === 'string' && item.companyName) ||
       (typeof item.company === 'string' && item.company) ||
       (typeof item.organization_name === 'string' && item.organization_name) ||
       undefined,
@@ -70,17 +71,12 @@ export class InstantlyLeadDiscoveryProvider implements LeadDiscoveryProvider {
       throw new Error('Instantly credentials are not configured')
     }
 
-    const profiles: LinkedInProfile[] = []
     const diagnostics: string[] = []
-    let requests = 0
-    let rawProfilesReturned = 0
-
-    for (const query of input.queries) {
-      requests++
+    const queryResults = await mapWithConcurrency(input.queries, 3, async (query) => {
       const translated = translateCurrentQueryToInstantlyFilter(query)
 
       try {
-        const response = await fetch(`${INSTANTLY_BASE_URL}/leads/preview`, {
+        const response = await fetch(`${INSTANTLY_BASE_URL}${INSTANTLY_PREVIEW_PATH}`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -90,6 +86,7 @@ export class InstantlyLeadDiscoveryProvider implements LeadDiscoveryProvider {
             ...translated,
             workspace_id: input.credentials.instantly.workspaceId ?? undefined,
           }),
+          signal: AbortSignal.timeout(INSTANTLY_REQUEST_TIMEOUT_MS),
         })
 
         if (!response.ok) {
@@ -103,25 +100,45 @@ export class InstantlyLeadDiscoveryProvider implements LeadDiscoveryProvider {
           results?: Array<Record<string, unknown>>
         }
 
-        const records = data.items ?? data.data ?? data.leads ?? data.results ?? []
-        rawProfilesReturned += records.length
-
-        for (const record of records) {
-          const mapped = mapInstantlyLead(record)
-          if (mapped) profiles.push(mapped)
+        const records = (data.items ?? data.data ?? data.leads ?? data.results ?? []).slice(
+          0,
+          query.maxResults,
+        )
+        return {
+          ok: true as const,
+          rawProfilesReturned: records.length,
+          profiles: records.map(mapInstantlyLead).filter(Boolean) as LinkedInProfile[],
         }
       } catch (error) {
-        diagnostics.push(`Instantly query "${query.queryName}" failed: ${String(error)}`)
-        throw error
+        const message = `Instantly query "${query.queryName}" failed: ${String(error)}`
+        diagnostics.push(message)
+        return {
+          ok: false as const,
+          rawProfilesReturned: 0,
+          profiles: [] as LinkedInProfile[],
+          error: message,
+        }
       }
+    })
+
+    const successfulResults = queryResults.filter((result) => result.ok)
+    const failedResults = queryResults.filter((result) => !result.ok)
+
+    if (successfulResults.length === 0) {
+      throw new Error(diagnostics.join(' | ') || 'Instantly discovery failed for all queries')
     }
+
+    const profiles = successfulResults.flatMap((result) => result.profiles)
+    const rawProfilesReturned = successfulResults.reduce((sum, result) => sum + result.rawProfilesReturned, 0)
 
     return {
       providerUsed: this.name,
       providerFallbackUsed: false,
       profiles,
       usage: {
-        requests,
+        requests: input.queries.length,
+        successfulRequests: successfulResults.length,
+        failedRequests: failedResults.length,
         rawProfilesReturned,
         acceptedProfiles: profiles.length,
       },

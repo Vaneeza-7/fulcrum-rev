@@ -46,6 +46,8 @@ export interface LeadDiscoveryResult {
   profiles: LinkedInProfile[]
   usage: {
     requests: number
+    successfulRequests: number
+    failedRequests: number
     rawProfilesReturned: number
     acceptedProfiles: number
   }

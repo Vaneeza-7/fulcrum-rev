@@ -122,6 +122,10 @@ export async function recordAnthropicUsage(
   input: MeteredUsageInput,
   db: SettingsDbClient = prisma,
 ) {
+  if (input.inputTokens <= 0 && input.outputTokens <= 0) {
+    return null
+  }
+
   if (input.tenantOwnedCredentialUsed) {
     return createUsageEvent(
       {
@@ -202,6 +206,16 @@ export async function recordPerplexityUsage(
   input: MeteredUsageInput & { searchQueries: number; directCostUsdMicros: number | null },
   db: SettingsDbClient = prisma,
 ) {
+  const hasMeteredUsage =
+    input.searchQueries > 0 ||
+    input.inputTokens > 0 ||
+    input.outputTokens > 0 ||
+    typeof input.directCostUsdMicros === 'number'
+
+  if (!hasMeteredUsage) {
+    return null
+  }
+
   if (input.tenantOwnedCredentialUsed) {
     return createUsageEvent(
       {

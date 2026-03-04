@@ -6,13 +6,9 @@ import type { ICPContext } from '@/lib/onboarding/generate-config'
 import { initializeColdStart } from '@/lib/cold-start'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { resolveAnthropicCredentials } from '@/lib/settings/api-keys'
-
-const SCORING_CONFIG_TYPES = [
-  'company_size',
-  'industry_fit',
-  'role_authority',
-  'revenue_signals',
-] as const
+import { replaceTenantSearchQueries } from '@/lib/settings/search-queries'
+import { replaceTenantIntentKeywords } from '@/lib/settings/intent-keywords'
+import { upsertTenantScoringConfig } from '@/lib/settings/scoring'
 
 export async function POST() {
   try {
@@ -88,6 +84,8 @@ export async function POST() {
     try {
       generated = await generateConfig(context, {
         apiKey: anthropicCredentials.apiKey ?? undefined,
+        timeoutMs: 55_000,
+        signal: controller.signal,
         billingContext: {
           tenantId: tenant.id,
           provider: 'anthropic',
@@ -104,57 +102,18 @@ export async function POST() {
       clearTimeout(timeout)
     }
 
-    // Persist generated config in a transaction
-    await prisma.$transaction(async (tx) => {
-      // Search queries: replace-all
-      await tx.tenantSearchQuery.deleteMany({
-        where: { tenantId: tenant.id },
+    try {
+      await prisma.$transaction(async (tx) => {
+        await replaceTenantSearchQueries(tx, tenant.id, generated.searchQueries)
+        await replaceTenantIntentKeywords(tx, tenant.id, generated.intentKeywords)
+        await upsertTenantScoringConfig(tx, tenant.id, generated.scoringConfig)
       })
-      await tx.tenantSearchQuery.createMany({
-        data: generated.searchQueries.map((q) => ({
-          tenantId: tenant.id,
-          queryName: q.queryName,
-          searchQuery: q.searchQuery as any,
-          maxResults: q.maxResults,
-        })),
-      })
-
-      // Intent keywords: replace-all
-      await tx.tenantIntentKeyword.deleteMany({
-        where: { tenantId: tenant.id },
-      })
-      await tx.tenantIntentKeyword.createMany({
-        data: generated.intentKeywords.map((k) => ({
-          tenantId: tenant.id,
-          keyword: k.keyword,
-          intentScore: k.intentScore,
-          category: k.category,
-        })),
-      })
-
-      // Scoring configs: upsert each type
-      for (const configType of SCORING_CONFIG_TYPES) {
-        const configData = generated.scoringConfig[configType]
-        if (configData) {
-          await tx.tenantScoringConfig.upsert({
-            where: {
-              tenantId_configType: {
-                tenantId: tenant.id,
-                configType,
-              },
-            },
-            create: {
-              tenantId: tenant.id,
-              configType,
-              configData: configData as any,
-            },
-            update: {
-              configData: configData as any,
-            },
-          })
-        }
-      }
-    })
+    } catch {
+      return NextResponse.json(
+        { error: 'AI generated an invalid launch configuration. Please try again.' },
+        { status: 502 },
+      )
+    }
 
     // Initialize cold-start (non-fatal)
     try {

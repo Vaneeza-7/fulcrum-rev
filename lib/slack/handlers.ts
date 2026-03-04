@@ -1,130 +1,80 @@
-import { prisma, auditLog } from '@/lib/db';
-import { CRMFactory } from '@/lib/crm/factory';
-import { sendLeadReviewThread } from './client';
-import { SlackLeadCard } from './types';
-import * as monitoringDb from '@/lib/monitoring-db';
-import { HITLProcessor } from '@/lib/hitl/hitl-processor';
-import { NegativeReason } from '@prisma/client';
-import { decryptCrmConfig } from '@/lib/settings/crm';
+import { NegativeReason } from '@prisma/client'
+import { prisma } from '@/lib/db'
+import { sendLeadReviewThread } from './client'
+import type { SlackLeadCard } from './types'
+import * as monitoringDb from '@/lib/monitoring-db'
+import {
+  bulkApproveLeadsByGrade,
+  approveLeadForCrmQueue,
+  rejectLeadFromReview,
+  type LeadReviewResult,
+} from '@/lib/leads/review'
+import { decryptCrmConfig } from '@/lib/settings/crm'
+
+function toSlackLeadCard(lead: {
+  tenantId: string
+  id: string
+  fullName: string
+  title: string | null
+  company: string | null
+  fulcrumScore: number
+  fulcrumGrade: string | null
+  fitScore: number
+  intentScore: number
+  firstLine: string | null
+  linkedinUrl: string
+  crmLeadId?: string | null
+  crmPushState?: string | null
+  crmPushLastError?: string | null
+}): SlackLeadCard {
+  return {
+    tenant_id: lead.tenantId,
+    lead_id: lead.id,
+    full_name: lead.fullName,
+    title: lead.title ?? '',
+    company: lead.company ?? '',
+    fulcrum_score: Number(lead.fulcrumScore),
+    fulcrum_grade: lead.fulcrumGrade ?? '',
+    fit_score: Number(lead.fitScore),
+    intent_score: Number(lead.intentScore),
+    first_line: lead.firstLine ?? '',
+    linkedin_url: lead.linkedinUrl,
+    crm_lead_id: lead.crmLeadId ?? undefined,
+    crm_push_state: lead.crmPushState ?? null,
+    crm_push_last_error: lead.crmPushLastError ?? null,
+  }
+}
 
 /**
- * Handle "Push All A+" button click.
- * Approves and pushes all A+ leads for the tenant.
+ * Handle legacy "Push All A+" button click.
+ * Approves and queues all A+ leads for the tenant.
  */
-export async function handlePushAllAPlus(tenantId: string): Promise<{ pushed: number; errors: string[] }> {
-  const leads = await prisma.lead.findMany({
-    where: {
-      tenantId,
-      status: 'pending_review',
-      fulcrumGrade: 'A+',
-    },
-  });
+export async function handlePushAllAPlus(tenantId: string): Promise<{ approved: number; failedPreflight: number; errors: string[] }> {
+  const result = await bulkApproveLeadsByGrade({
+    tenantId,
+    grades: ['A+'],
+    approvedBy: 'slack_user',
+  })
 
-  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-  if (!tenant.crmType) {
-    return { pushed: 0, errors: ['No CRM configured for this tenant'] };
+  return {
+    approved: result.approved,
+    failedPreflight: result.failedPreflight,
+    errors: result.errors,
   }
-  const crmConfig = decryptCrmConfig(tenant.crmConfig);
-  if (!crmConfig) {
-    return { pushed: 0, errors: ['CRM config missing or unreadable'] };
-  }
-
-  const crm = CRMFactory.create(tenant.crmType, crmConfig);
-  await crm.authenticate();
-
-  let pushed = 0;
-  const errors: string[] = [];
-
-  for (const lead of leads) {
-    try {
-      const nameParts = lead.fullName.split(' ');
-      const crmLeadId = await crm.createLead({
-        first_name: nameParts.slice(0, -1).join(' ') || nameParts[0],
-        last_name: nameParts[nameParts.length - 1] || 'Unknown',
-        company: lead.company ?? '',
-        title: lead.title ?? '',
-        linkedin_url: lead.linkedinUrl,
-        fulcrum_score: Number(lead.fulcrumScore),
-        fulcrum_grade: lead.fulcrumGrade ?? '',
-        fit_score: Number(lead.fitScore),
-        intent_score: Number(lead.intentScore),
-        first_line: lead.firstLine ?? '',
-        source: 'Fulcrum',
-      });
-
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: {
-          status: 'pushed_to_crm',
-          crmLeadId,
-          pushedToCrmAt: new Date(),
-        },
-      });
-
-      await auditLog(tenantId, 'lead_pushed_to_crm', lead.id, { crmLeadId });
-      pushed++;
-    } catch (error) {
-      errors.push(`${lead.fullName}: ${error}`);
-    }
-  }
-
-  return { pushed, errors };
 }
 
 /**
  * Handle "Approve" button on a single lead.
  */
-export async function handleApproveLead(tenantId: string, leadId: string): Promise<{ success: boolean; crmLeadId?: string; error?: string }> {
-  try {
-    const lead = await prisma.lead.findUniqueOrThrow({
-      where: { id: leadId },
-    });
-
-    if (lead.tenantId !== tenantId) {
-      return { success: false, error: 'Lead does not belong to this tenant' };
-    }
-
-    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
-    if (!tenant.crmType) {
-      return { success: false, error: 'No CRM configured for this tenant' };
-    }
-    const crmConfig = decryptCrmConfig(tenant.crmConfig);
-    if (!crmConfig) {
-      return { success: false, error: 'CRM config missing or unreadable' };
-    }
-
-    const crm = CRMFactory.create(tenant.crmType, crmConfig);
-    await crm.authenticate();
-
-    const nameParts = lead.fullName.split(' ');
-    const crmLeadId = await crm.createLead({
-      first_name: nameParts.slice(0, -1).join(' ') || nameParts[0],
-      last_name: nameParts[nameParts.length - 1] || 'Unknown',
-      company: lead.company ?? '',
-      title: lead.title ?? '',
-      linkedin_url: lead.linkedinUrl,
-      fulcrum_score: Number(lead.fulcrumScore),
-      fulcrum_grade: lead.fulcrumGrade ?? '',
-      fit_score: Number(lead.fitScore),
-      intent_score: Number(lead.intentScore),
-      first_line: lead.firstLine ?? '',
-      source: 'Fulcrum',
-    });
-
-    await prisma.lead.update({
-      where: { id: leadId },
-      data: {
-        status: 'pushed_to_crm',
-        crmLeadId,
-        pushedToCrmAt: new Date(),
-      },
-    });
-
-    await auditLog(tenantId, 'lead_approved', leadId, { crmLeadId });
-    return { success: true, crmLeadId };
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
+export async function handleApproveLead(
+  tenantId: string,
+  leadId: string,
+): Promise<LeadReviewResult> {
+  return approveLeadForCrmQueue({
+    tenantId,
+    leadId,
+    approvedBy: 'slack_user',
+  })
 }
 
 /**
@@ -136,33 +86,14 @@ export async function handleRejectLead(
   reason?: string,
   rejectReason?: NegativeReason,
   rejectedBy?: string,
-): Promise<void> {
-  const lead = await prisma.lead.findUniqueOrThrow({
-    where: { id: leadId },
-  });
-
-  if (lead.tenantId !== tenantId) {
-    throw new Error('Lead does not belong to this tenant');
-  }
-
-  await prisma.lead.update({
-    where: { id: leadId },
-    data: {
-      status: 'rejected',
-      rejectionReason: reason ?? 'Rejected via Slack',
-    },
-  });
-
-  await auditLog(tenantId, 'lead_rejected', leadId, { reason });
-
-  // Create NegativeSignal for HITL feedback loop
-  await HITLProcessor.processRejection({
+): Promise<LeadReviewResult> {
+  return rejectLeadFromReview({
     tenantId,
     leadId,
+    rejectionReason: reason ?? 'Rejected via Slack',
     rejectReason: rejectReason ?? NegativeReason.OTHER,
-    rejectReasonRaw: reason,
     rejectedBy: rejectedBy ?? 'slack_user',
-  });
+  })
 }
 
 /**
@@ -174,15 +105,14 @@ export async function handleRejectBrandSuggestion(
   reason?: string,
   rejectedBy?: string,
 ): Promise<void> {
+  const { HITLProcessor } = await import('@/lib/hitl/hitl-processor')
   await HITLProcessor.processRejection({
     tenantId,
     brandSuggestionId,
     rejectReason: NegativeReason.BRAND_MISMATCH,
     rejectReasonRaw: reason,
     rejectedBy: rejectedBy ?? 'slack_user',
-  });
-
-  await auditLog(tenantId, 'brand_suggestion_rejected', brandSuggestionId, { reason });
+  })
 }
 
 /**
@@ -190,26 +120,47 @@ export async function handleRejectBrandSuggestion(
  * Posts individual lead cards in a thread for review.
  */
 export async function handleReviewLeads(tenantId: string, threadTs?: string): Promise<void> {
-  const leads = await prisma.lead.findMany({
-    where: { tenantId, status: 'pending_review' },
-    orderBy: { fulcrumScore: 'desc' },
-    take: 30,
-  });
+  const [tenant, leads] = await Promise.all([
+    prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { crmType: true, crmConfig: true },
+    }),
+    prisma.lead.findMany({
+      where: { tenantId, status: { in: ['pending_review', 'awaiting_approval'] } },
+      orderBy: { fulcrumScore: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        tenantId: true,
+        fullName: true,
+        title: true,
+        company: true,
+        fulcrumScore: true,
+        fulcrumGrade: true,
+        fitScore: true,
+        intentScore: true,
+        firstLine: true,
+        linkedinUrl: true,
+        crmLeadId: true,
+        crmPushState: true,
+        crmPushLastError: true,
+      },
+    }),
+  ])
 
-  const leadCards: SlackLeadCard[] = leads.map((l) => ({
-    lead_id: l.id,
-    full_name: l.fullName,
-    title: l.title ?? '',
-    company: l.company ?? '',
-    fulcrum_score: Number(l.fulcrumScore),
-    fulcrum_grade: l.fulcrumGrade ?? '',
-    fit_score: Number(l.fitScore),
-    intent_score: Number(l.intentScore),
-    first_line: l.firstLine ?? '',
-    linkedin_url: l.linkedinUrl,
-  }));
+  const crmConfig = decryptCrmConfig(tenant.crmConfig) ?? {}
+  const crmOrgId = typeof crmConfig.org_id === 'string' ? crmConfig.org_id : undefined
 
-  await sendLeadReviewThread(tenantId, leadCards, threadTs);
+  const leadCards: SlackLeadCard[] = leads.map((lead) =>
+    toSlackLeadCard({
+      ...lead,
+      fulcrumScore: Number(lead.fulcrumScore),
+      fitScore: Number(lead.fitScore),
+      intentScore: Number(lead.intentScore),
+    }),
+  )
+
+  await sendLeadReviewThread(tenantId, leadCards, threadTs, crmOrgId, tenant.crmType ?? undefined)
 }
 
 /**
@@ -225,11 +176,14 @@ export async function handleRejectGrade(tenantId: string, grades: string[]): Pro
     data: {
       status: 'rejected',
       rejectionReason: `Auto-rejected: grade ${grades.join(', ')}`,
+      crmPushState: 'not_queued',
+      crmPushLastError: null,
+      crmPushQueuedAt: null,
+      crmPushProcessingAt: null,
     },
-  });
+  })
 
-  await auditLog(tenantId, 'leads_bulk_rejected', undefined, { grades, count: result.count });
-  return result.count;
+  return result.count
 }
 
 /**
@@ -238,9 +192,9 @@ export async function handleRejectGrade(tenantId: string, grades: string[]): Pro
 export async function handleMonitoringDismiss(
   alertId: string,
   resourceId: string,
-  userId: string
+  userId: string,
 ): Promise<void> {
-  await monitoringDb.dismissAlert(alertId, userId);
+  await monitoringDb.dismissAlert(alertId, userId)
 }
 
 /**
@@ -249,9 +203,9 @@ export async function handleMonitoringDismiss(
 export async function handleMonitoringAck(
   alertId: string,
   resourceId: string,
-  userId: string
+  userId: string,
 ): Promise<void> {
-  await monitoringDb.acknowledgeAlert(alertId, userId);
+  await monitoringDb.acknowledgeAlert(alertId, userId)
 }
 
 /**
@@ -261,7 +215,7 @@ export async function handleMonitoringSuppress(
   alertId: string,
   resourceId: string,
   resourceName: string,
-  userId: string
+  userId: string,
 ): Promise<void> {
-  await monitoringDb.suppressResource(resourceId, resourceName, userId);
+  await monitoringDb.suppressResource(resourceId, resourceName, userId)
 }

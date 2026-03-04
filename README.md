@@ -33,6 +33,7 @@ npx prisma generate
 npm run db:migrate
 npm run billing:seed-provider-pricing
 npm run billing:assign-plan -- --tenantId <tenant-id> --plan growth
+npm run crm:backfill-push-state -- --tenantId <tenant-id> --dryRun
 ```
 
 ## Required Environment
@@ -51,6 +52,7 @@ CLERK_WEBHOOK_SECRET=
 CRON_SECRET=
 TOKEN_ENCRYPTION_KEY=
 APP_URL=
+CORE_LAUNCH_TENANT_IDS=
 ```
 
 Discovery and AI:
@@ -112,24 +114,18 @@ More detail: `docs/DISCOVERY-PROVIDERS.md`
 
 More detail: `docs/BILLING.md`
 
+CRM queue rollout and recovery: `docs/CRM-QUEUE-ROLLOUT.md`
+
 ## Cron Schedule
 
 | Path | Schedule (UTC) |
 | --- | --- |
 | `/api/cron/pipeline` | `0 10 * * 1-5` |
+| `/api/cron/crm-push` | `*/5 * * * *` |
 | `/api/cron/roi-sync` | `0 2 * * *` |
 | `/api/cron/hitl-recalibrate` | `0 3 * * *` |
 | `/api/cron/cold-start-check` | `0 0 * * *` |
-| `/api/cron/email-digest` | `0 10 * * *` |
-| `/api/cron/diagnostics` | `0 6 * * *` |
-| `/api/cron/icm` | `0 6 * * *` |
-| `/api/cron/health` | `0 12 * * *` |
-| `/api/cron/weekly-digest` | `0 9 * * 5` |
-| `/api/cron/seo` | `0 4 * * 1` |
-| `/api/cron/cro` | `0 3 1,15 * *` |
-| `/api/cron/content-allocation` | `0 5 1 * *` |
-| `/api/cron/content-roi` | `0 6 2 * *` |
-| `/api/cron/persona-deployment` | `0 8 * * *` |
+| `/api/cron/health` | `*/15 * * * *` |
 | `/api/cron/billing-sync` | `0 1 * * *` |
 
 ## Verification Status

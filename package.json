@@ -16,7 +16,11 @@
     "billing:seed-provider-pricing": "npx tsx scripts/billing/seed-provider-pricing.ts",
     "billing:assign-plan": "npx tsx scripts/billing/assign-plan.ts",
     "billing:list-tenants": "npx tsx scripts/billing/list-tenants.ts",
+    "billing:recalculate-manual-periods": "npx tsx scripts/billing/recalculate-manual-periods.ts",
     "billing:update-provider-price": "npx tsx scripts/billing/update-provider-price.ts",
+    "crm:backfill-push-state": "npx tsx scripts/crm/backfill-push-state.ts",
+    "crm:requeue-failed-pushes": "npx tsx scripts/crm/requeue-failed-pushes.ts",
+    "crm:unpause-tenant": "npx tsx scripts/crm/unpause-tenant.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

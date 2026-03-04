@@ -1,4 +1,5 @@
 export interface SlackLeadCard {
+  tenant_id: string;
   lead_id: string;
   full_name: string;
   title: string;
@@ -10,9 +11,12 @@ export interface SlackLeadCard {
   first_line: string;
   linkedin_url: string;
   crm_lead_id?: string;
+  crm_push_state?: string | null;
+  crm_push_last_error?: string | null;
 }
 
 export interface SlackPipelineSummary {
+  tenant_id: string;
   tenant_name: string;
   profiles_scraped: number;
   profiles_new: number;

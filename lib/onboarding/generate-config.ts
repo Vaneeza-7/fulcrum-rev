@@ -110,7 +110,7 @@ Rules:
 
 export async function generateConfig(
   context: ICPContext,
-  options?: Pick<ClaudeRequestOptions, 'apiKey' | 'billingContext'>,
+  options?: Pick<ClaudeRequestOptions, 'apiKey' | 'billingContext' | 'timeoutMs' | 'signal'>,
 ): Promise<GeneratedConfig> {
   const userMessage = `
 ## Company Profile
@@ -145,6 +145,8 @@ Generate a lead research configuration optimized for finding prospects who are m
   return askClaudeJson<GeneratedConfig>(SYSTEM_PROMPT, userMessage, {
     maxTokens: 4096,
     apiKey: options?.apiKey,
+    timeoutMs: options?.timeoutMs,
+    signal: options?.signal,
     billingContext: options?.billingContext,
   })
 }

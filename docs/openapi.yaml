@@ -19,6 +19,10 @@ paths:
           schema:
             type: string
         - in: query
+          name: crmPushState
+          schema:
+            type: string
+        - in: query
           name: grade
           schema:
             type: string
@@ -69,6 +73,152 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Lead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/leads/actions:
+    post:
+      tags: [Leads]
+      summary: Run a bulk lead queue or approval action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      enum: [bulk_approve_by_grade]
+                    grades:
+                      type: array
+                      items:
+                        type: string
+                  required: [action, grades]
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      enum: [retry_failed_crm_pushes]
+                  required: [action]
+      responses:
+        '200':
+          description: Bulk lead action completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  action:
+                    type: string
+                  totalMatched:
+                    type: integer
+                  approved:
+                    type: integer
+                  failedPreflight:
+                    type: integer
+                  queued:
+                    type: integer
+                  stillFailed:
+                    type: integer
+                  errors:
+                    oneOf:
+                      - type: array
+                        items:
+                          type: string
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/BulkErrorSummary'
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/leads/{id}:
+    patch:
+      tags: [Leads]
+      summary: Approve or reject a single lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+                rejectionReason:
+                  type: string
+                rejectReason:
+                  type: string
+              required: [status]
+      responses:
+        '200':
+          description: Lead state updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  lead:
+                    $ref: '#/components/schemas/LeadActionSnapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/leads/{id}/actions:
+    post:
+      tags: [Leads]
+      summary: Retry a failed CRM push for a single lead
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [retry_crm_push]
+              required: [action]
+      responses:
+        '200':
+          description: Lead CRM retry queued or failed preflight
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  lead:
+                    $ref: '#/components/schemas/LeadActionSnapshot'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/usage/summary:
@@ -253,6 +403,41 @@ paths:
       responses:
         '200':
           description: CRM settings saved
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/settings/crm/actions:
+    post:
+      tags: [Settings]
+      summary: Pause or unpause tenant CRM push processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      enum: [pause_crm_push]
+                    reason:
+                      type: string
+                  required: [action]
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      enum: [unpause_crm_push]
+                  required: [action]
+      responses:
+        '200':
+          description: CRM push state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrmSettingsActionResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -609,9 +794,60 @@ components:
           type: number
         status:
           type: string
+        crmPushState:
+          type: string
+        crmPushAttempts:
+          type: integer
+        crmPushLastError:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedBy:
+          type: string
+          nullable: true
+        pushedToCrmAt:
+          type: string
+          format: date-time
+          nullable: true
+        crmLeadId:
+          type: string
+          nullable: true
         discoveredAt:
           type: string
           format: date-time
+    LeadActionSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        crmPushState:
+          type: string
+        crmPushLastError:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        approvedBy:
+          type: string
+          nullable: true
+        crmLeadId:
+          type: string
+          nullable: true
+    BulkErrorSummary:
+      type: object
+      properties:
+        message:
+          type: string
+        count:
+          type: integer
     SearchQuery:
       allOf:
         - $ref: '#/components/schemas/SearchQueryInput'
@@ -721,6 +957,31 @@ components:
         customViewUrl:
           type: string
           nullable: true
+        crmPushPaused:
+          type: boolean
+        crmPushPauseReason:
+          type: string
+          nullable: true
+        crmPushPausedAt:
+          type: string
+          format: date-time
+          nullable: true
+    CrmSettingsActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        paused:
+          type: boolean
+        pauseReason:
+          type: string
+          nullable: true
+        pausedAt:
+          type: string
+          format: date-time
+          nullable: true
+        message:
+          type: string
     SlackSettings:
       type: object
       properties:

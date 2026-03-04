@@ -88,15 +88,16 @@ ${roiSection}`;
         elements: [
           {
             type: 'button',
-            text: { type: 'plain_text', text: 'Push All A+ to CRM' },
+            text: { type: 'plain_text', text: 'Approve All A+' },
             style: 'primary',
             action_id: 'push_all_aplus',
-            value: JSON.stringify({ grades: ['A+'] }),
+            value: JSON.stringify({ tenantId, grades: ['A+'] }),
           },
           {
             type: 'button',
             text: { type: 'plain_text', text: 'Review All Leads' },
             action_id: 'review_leads',
+            value: JSON.stringify({ tenantId }),
           },
         ],
       },

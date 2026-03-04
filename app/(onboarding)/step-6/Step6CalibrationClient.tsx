@@ -77,13 +77,13 @@ export function Step6CalibrationClient({
     if (!pendingRejectLeadId) return
     const primaryReason = CHIP_TO_REJECT_REASON[reasonIds[0]] ?? 'OTHER'
     try {
-      const res = await fetch('/api/hitl/feedback', {
-        method: 'POST',
+      const res = await fetch(`/api/leads/${pendingRejectLeadId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          leadId: pendingRejectLeadId,
+          status: 'rejected',
           rejectReason: primaryReason,
-          rejectReasonRaw: reasonIds.join(', '),
+          rejectionReason: reasonIds.join(', '),
         }),
       })
       if (res.ok) {

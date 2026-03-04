@@ -8,8 +8,12 @@ export async function GET(request: NextRequest) {
 
   const { tenant } = authResult
   const status = request.nextUrl.searchParams.get('status') ?? undefined
+  const crmPushState = request.nextUrl.searchParams.get('crmPushState') ?? undefined
   const grade = request.nextUrl.searchParams.get('grade') ?? undefined
-  const query = request.nextUrl.searchParams.get('q') ?? undefined
+  const query =
+    request.nextUrl.searchParams.get('search') ??
+    request.nextUrl.searchParams.get('q') ??
+    undefined
   const dateFrom = request.nextUrl.searchParams.get('dateFrom') ?? undefined
   const dateTo = request.nextUrl.searchParams.get('dateTo') ?? undefined
   const page = Math.max(1, Number(request.nextUrl.searchParams.get('page') ?? '1'))
@@ -18,6 +22,7 @@ export async function GET(request: NextRequest) {
   const where = {
     tenantId: tenant.id,
     ...(status ? { status } : {}),
+    ...(crmPushState ? { crmPushState } : {}),
     ...(grade ? { fulcrumGrade: grade } : {}),
     ...(query
       ? {
@@ -60,6 +65,7 @@ export async function GET(request: NextRequest) {
     totalPages: Math.ceil(total / pageSize),
     filters: {
       status: status ?? null,
+      crmPushState: crmPushState ?? null,
       grade: grade ?? null,
       q: query ?? null,
       dateFrom: dateFrom ?? null,
@@ -78,6 +84,11 @@ export async function GET(request: NextRequest) {
       intentScore: Number(lead.intentScore),
       status: lead.status,
       rejectionReason: lead.rejectionReason,
+      crmPushState: lead.crmPushState,
+      crmPushAttempts: lead.crmPushAttempts,
+      crmPushLastError: lead.crmPushLastError,
+      approvedAt: lead.approvedAt,
+      approvedBy: lead.approvedBy,
       firstLine: lead.firstLine,
       scoreBreakdown: lead.scoreBreakdown,
       enrichmentData: lead.enrichmentData,

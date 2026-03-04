@@ -24,6 +24,8 @@ export interface ClaudeRequestOptions {
   maxTokens?: number
   model?: string
   apiKey?: string
+  timeoutMs?: number
+  signal?: AbortSignal
   billingContext?: BillableUsageContext
 }
 
@@ -45,13 +47,23 @@ async function sendClaudeMessage(
   options?: ClaudeRequestOptions,
 ): Promise<ClaudeCallResult> {
   const client = getClaudeClient(options?.apiKey)
+  const requestOptions: { timeout?: number; signal?: AbortSignal } = {}
+  if (typeof options?.timeoutMs === 'number' && Number.isInteger(options.timeoutMs) && options.timeoutMs > 0) {
+    requestOptions.timeout = options.timeoutMs
+  }
+  if (options?.signal) {
+    requestOptions.signal = options.signal
+  }
   const response = await withRetry(
-    () => client.messages.create({
-      model: options?.model ?? 'claude-sonnet-4-20250514',
-      max_tokens: options?.maxTokens ?? 2048,
-      system: systemPrompt,
-      messages,
-    }),
+    () => client.messages.create(
+      {
+        model: options?.model ?? 'claude-sonnet-4-20250514',
+        max_tokens: options?.maxTokens ?? 2048,
+        system: systemPrompt,
+        messages,
+      },
+      requestOptions,
+    ),
     'askClaude',
   )
 

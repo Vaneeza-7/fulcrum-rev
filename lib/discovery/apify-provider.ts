@@ -1,7 +1,10 @@
 import type { LinkedInProfile } from '@/lib/pipeline/types'
 import type { LeadDiscoveryProvider, LeadDiscoveryRequest, LeadDiscoveryResult } from './provider'
+import { mapWithConcurrency } from '@/lib/utils/map-with-concurrency'
 
 const APIFY_BASE = 'https://api.apify.com/v2'
+const APIFY_QUERY_MAX_WAIT_MS = 90_000
+const APIFY_QUERY_POLL_INTERVAL_MS = 5_000
 
 interface ApifyRunResult {
   id: string
@@ -34,11 +37,9 @@ async function startLinkedInSearch(
 }
 
 async function waitForResults(apiToken: string, runId: string): Promise<LinkedInProfile[]> {
-  const maxWait = 5 * 60 * 1000
-  const pollInterval = 10000
   const start = Date.now()
 
-  while (Date.now() - start < maxWait) {
+  while (Date.now() - start < APIFY_QUERY_MAX_WAIT_MS) {
     const statusRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${apiToken}`)
     const statusData = (await statusRes.json()) as { data: ApifyRunResult }
 
@@ -50,10 +51,10 @@ async function waitForResults(apiToken: string, runId: string): Promise<LinkedIn
       throw new Error(`Apify run ${runId} failed with status: ${statusData.data.status}`)
     }
 
-    await new Promise((resolve) => setTimeout(resolve, pollInterval))
+    await new Promise((resolve) => setTimeout(resolve, APIFY_QUERY_POLL_INTERVAL_MS))
   }
 
-  throw new Error(`Apify run ${runId} timed out after 5 minutes`)
+  throw new Error(`Apify run ${runId} timed out after ${APIFY_QUERY_MAX_WAIT_MS}ms`)
 }
 
 async function fetchRunDataset(apiToken: string, runId: string): Promise<LinkedInProfile[]> {
@@ -83,29 +84,46 @@ export class ApifyLeadDiscoveryProvider implements LeadDiscoveryProvider {
       throw new Error('Apify credentials are not configured')
     }
 
-    const profiles: LinkedInProfile[] = []
     const diagnostics: string[] = []
-    let requests = 0
-    let rawProfilesReturned = 0
-
-    for (const query of input.queries) {
-      requests++
+    const queryResults = await mapWithConcurrency(input.queries, 3, async (query) => {
       try {
         const runId = await startLinkedInSearch(apiToken, query.searchQuery, query.maxResults)
-        const queryProfiles = await waitForResults(apiToken, runId)
-        rawProfilesReturned += queryProfiles.length
-        profiles.push(...queryProfiles)
+        const profiles = await waitForResults(apiToken, runId)
+        return {
+          ok: true as const,
+          profiles,
+          rawProfilesReturned: profiles.length,
+        }
       } catch (error) {
-        diagnostics.push(`Apify query "${query.queryName}" failed: ${String(error)}`)
+        const message = `Apify query "${query.queryName}" failed: ${String(error)}`
+        diagnostics.push(message)
+        return {
+          ok: false as const,
+          profiles: [] as LinkedInProfile[],
+          rawProfilesReturned: 0,
+          error: message,
+        }
       }
+    })
+
+    const successfulResults = queryResults.filter((result) => result.ok)
+    const failedResults = queryResults.filter((result) => !result.ok)
+
+    if (successfulResults.length === 0) {
+      throw new Error(diagnostics.join(' | ') || 'Apify discovery failed for all queries')
     }
+
+    const profiles = successfulResults.flatMap((result) => result.profiles)
+    const rawProfilesReturned = successfulResults.reduce((sum, result) => sum + result.rawProfilesReturned, 0)
 
     return {
       providerUsed: this.name,
       providerFallbackUsed: false,
       profiles,
       usage: {
-        requests,
+        requests: input.queries.length,
+        successfulRequests: successfulResults.length,
+        failedRequests: failedResults.length,
         rawProfilesReturned,
         acceptedProfiles: profiles.length,
       },

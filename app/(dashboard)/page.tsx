@@ -1,6 +1,7 @@
 // app/(dashboard)/page.tsx
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { SignUpButton } from '@clerk/nextjs'
 import { prisma } from '@/lib/db'
 import { ColdStartGate } from '@/lib/cold-start'
@@ -8,6 +9,7 @@ import { CalibrationWidget } from '@/components/dashboard/CalibrationWidget'
 import { ROIAttributionService } from '@/lib/roi/attribution-service'
 import { getROIAttribution } from '@/lib/roi/attribution-tagger'
 import { ROIAttributionTag } from '@/components/roi/ROIAttributionTag'
+import { getTenantIntegritySummary } from '@/lib/integrity/tenant-integrity'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +38,7 @@ export default async function DashboardPage() {
   const coldStartStatus = await ColdStartGate.getStatus(tenant.id)
 
   // Pipeline stats
-  const [totalLeads, pendingReview, pushedToCrm, gradeRows] = await Promise.all([
+  const [totalLeads, pendingReview, pushedToCrm, gradeRows, integrity, onboardingState] = await Promise.all([
     prisma.lead.count({ where: { tenantId: tenant.id } }),
     prisma.lead.count({ where: { tenantId: tenant.id, status: { in: ['pending_review', 'awaiting_approval'] } } }),
     prisma.lead.count({ where: { tenantId: tenant.id, status: 'pushed_to_crm' } }),
@@ -44,6 +46,11 @@ export default async function DashboardPage() {
       by: ['fulcrumGrade'],
       where: { tenantId: tenant.id, fulcrumGrade: { not: null } },
       _count: true,
+    }),
+    getTenantIntegritySummary(tenant.id),
+    prisma.tenantOnboardingState.findUnique({
+      where: { tenantId: tenant.id },
+      select: { coldStartStartedAt: true },
     }),
   ])
 
@@ -54,12 +61,23 @@ export default async function DashboardPage() {
     }
   }
 
+  const goodFitCount =
+    (gradeDistribution['A+'] ?? 0) +
+    (gradeDistribution['A'] ?? 0) +
+    (gradeDistribution['B'] ?? 0)
+  const goodFitRatio = totalLeads > 0 ? goodFitCount / totalLeads : 0
   // Last pipeline run
   const lastAudit = await prisma.auditLog.findFirst({
     where: { tenantId: tenant.id, actionType: 'pipeline_completed' },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true, details: true },
   })
+
+  const shouldShowOnboardingWarning =
+    Boolean(onboardingState?.coldStartStartedAt) &&
+    Boolean(lastAudit) &&
+    totalLeads < 5 &&
+    goodFitRatio < 0.15
 
   // ROI summary + attribution tag
   const roiSummary = await ROIAttributionService.getTenantROISummary(tenant.id)
@@ -96,6 +114,48 @@ export default async function DashboardPage() {
             <p className="text-sm text-gray-400">RevOps Dashboard</p>
           </div>
         </div>
+
+        {integrity.crmHealth.level !== 'GREEN' ? (
+          <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-amber-100">CRM Health</p>
+                <p className="mt-1 text-sm text-amber-50">{integrity.crmHealth.message}</p>
+                <p className="mt-1 text-xs text-amber-100/80">{integrity.crmHealth.action}</p>
+              </div>
+              <Link
+                href={
+                  integrity.crmHealth.failedCount > 0
+                    ? '/leads?crmPushState=failed'
+                    : '/leads?crmPushState=queued'
+                }
+                className="rounded-lg border border-amber-400/30 px-3 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/10"
+              >
+                Open CRM Queue
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {shouldShowOnboardingWarning ? (
+          <div className="mb-6 rounded-xl border border-sky-500/20 bg-sky-500/10 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-sky-100">Onboarding Needs Tuning</p>
+                <p className="mt-1 text-sm text-sky-50">
+                  The first pipeline run has not produced enough strong-fit reviewable leads yet.
+                  Update your search queries or scoring before the next run.
+                </p>
+              </div>
+              <Link
+                href="/settings"
+                className="rounded-lg border border-sky-400/30 px-3 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/10"
+              >
+                Edit Queries & Scoring
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {/* Top row: Calibration + Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

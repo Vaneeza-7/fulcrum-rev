@@ -15,11 +15,10 @@ describe('translateCurrentQueryToInstantlyFilter', () => {
     })
 
     expect(result).toEqual({
-      query: 'superintendent OR director student wellness',
-      filters: {
-        industry: 'Education',
-        company_size_min: 201,
-        company_size_max: 1000,
+      search_filters: {
+        title: {
+          include: ['superintendent', 'director'],
+        },
       },
       limit: 25,
     })
@@ -35,8 +34,31 @@ describe('translateCurrentQueryToInstantlyFilter', () => {
     })
 
     expect(result).toEqual({
-      query: 'founder',
-      filters: {},
+      search_filters: {
+        title: {
+          include: ['founder'],
+        },
+      },
+      limit: 10,
+    })
+  })
+
+  it('splits boolean role queries into title filters only for launch recall', () => {
+    const result = translateCurrentQueryToInstantlyFilter({
+      queryName: 'Startup leaders',
+      searchQuery: {
+        keywords: 'CEO OR Founder AND (software OR development OR technical)',
+        additionalKeywords: 'outsourcing help',
+      },
+      maxResults: 10,
+    })
+
+    expect(result).toEqual({
+      search_filters: {
+        title: {
+          include: ['CEO', 'Founder'],
+        },
+      },
       limit: 10,
     })
   })

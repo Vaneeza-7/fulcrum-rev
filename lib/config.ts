@@ -45,11 +45,14 @@ const envSchema = z.object({
   BILLING_INCLUDED_CREDITS_STARTER: z.string().optional(),
   BILLING_INCLUDED_CREDITS_GROWTH: z.string().optional(),
   BILLING_INCLUDED_CREDITS_SCALE: z.string().optional(),
+  CORE_LAUNCH_TENANT_IDS: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().min(32).optional(),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+const tenantIdSchema = z.string().uuid();
 
 function loadEnv(): Env {
   const parsed = envSchema.safeParse(process.env);
@@ -61,3 +64,29 @@ function loadEnv(): Env {
 }
 
 export const env = loadEnv();
+
+export function parseCoreLaunchTenantIds(rawValue: string | undefined): Set<string> | null {
+  if (!rawValue || rawValue.trim().length === 0) {
+    return null;
+  }
+
+  const tenantIds = rawValue
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (tenantIds.length === 0) {
+    return null;
+  }
+
+  for (const tenantId of tenantIds) {
+    const parsed = tenantIdSchema.safeParse(tenantId);
+    if (!parsed.success) {
+      throw new Error(`Invalid CORE_LAUNCH_TENANT_IDS entry: ${tenantId}`);
+    }
+  }
+
+  return new Set(tenantIds);
+}
+
+export const coreLaunchTenantIdAllowlist = parseCoreLaunchTenantIds(env.CORE_LAUNCH_TENANT_IDS);

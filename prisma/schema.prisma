@@ -24,6 +24,9 @@ model Tenant {
   anthropicApiKey       String?  @map("anthropic_api_key")
   perplexityApiKey      String?  @map("perplexity_api_key")
   isActive              Boolean  @default(true) @map("is_active")
+  crmPushPaused         Boolean  @default(false) @map("crm_push_paused")
+  crmPushPauseReason    String?  @map("crm_push_pause_reason")
+  crmPushPausedAt       DateTime? @map("crm_push_paused_at")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -79,6 +82,7 @@ model Tenant {
   profile              TenantProfile?
   competitors          TenantCompetitor[]
   deliveryPreference   TenantDeliveryPreference?
+  crmPushEvents        CrmPushEvent[]
 
   @@map("tenants")
 }
@@ -205,6 +209,13 @@ model Lead {
   rejectionReason String?   @map("rejection_reason")
   crmLeadId       String?   @map("crm_lead_id")
   pushedToCrmAt   DateTime? @map("pushed_to_crm_at")
+  crmPushState    String    @default("not_queued") @map("crm_push_state")
+  crmPushAttempts Int       @default(0) @map("crm_push_attempts")
+  crmPushQueuedAt DateTime? @map("crm_push_queued_at")
+  crmPushProcessingAt DateTime? @map("crm_push_processing_at")
+  crmPushLastError String?  @map("crm_push_last_error")
+  approvedAt      DateTime? @map("approved_at")
+  approvedBy      String?   @map("approved_by")
 
   discoveredAt DateTime @default(now()) @map("discovered_at")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -213,12 +224,38 @@ model Lead {
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   intentSignals    IntentSignal[]
   fulcrumSourceTag FulcrumSourceTag?
+  crmPushEvents    CrmPushEvent[]
 
   @@unique([tenantId, linkedinUrl])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, crmPushState])
+  @@index([tenantId, status, crmPushState])
   @@index([tenantId, fulcrumScore(sort: Desc)])
   @@map("leads")
+}
+
+model CrmPushEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  leadId       String   @map("lead_id") @db.Uuid
+  connector    String
+  outcome      String
+  crmObjectId  String?  @map("crm_object_id")
+  attemptNumber Int     @default(1) @map("attempt_number")
+  errorCode    String?  @map("error_code")
+  errorMessage String?  @map("error_message")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, outcome])
+  @@index([tenantId, leadId])
+  @@map("crm_push_events")
 }
 
 // ============================================================================

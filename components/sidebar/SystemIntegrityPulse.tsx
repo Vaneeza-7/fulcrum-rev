@@ -13,6 +13,16 @@ interface IntegrityData {
   status: IntegrityStatus
   details: IntegrityDetail[]
   checkedAt: string
+  crmHealth?: {
+    level: IntegrityStatus
+    queuedCount: number
+    failedCount: number
+    oldestQueuedMinutes: number | null
+    duplicateRate30d: string
+    paused: boolean
+    message: string
+    action: string
+  }
 }
 
 interface SystemIntegrityPulseProps {
@@ -49,6 +59,7 @@ const SIGNAL_ICON: Record<string, string> = {
   queue: '\u2699\uFE0F',
   cron: '\u{1F550}',
   calibration: '\u{1F9EA}',
+  crm_push_queue: '\u{1F4E4}',
 }
 
 export function SystemIntegrityPulse({
@@ -158,6 +169,15 @@ export function SystemIntegrityPulse({
                 </div>
               ))}
             </div>
+            {data.crmHealth ? (
+              <div className="mt-3 rounded-lg border border-gray-800 bg-gray-950/80 p-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  CRM Health
+                </p>
+                <p className="mt-1 text-xs text-white">{data.crmHealth.message}</p>
+                <p className="mt-1 text-[10px] text-gray-500">{data.crmHealth.action}</p>
+              </div>
+            ) : null}
             <p className="mt-2 text-[10px] text-gray-500">
               Updated {new Date(data.checkedAt).toLocaleTimeString()}
             </p>
